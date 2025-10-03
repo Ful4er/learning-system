@@ -1,13 +1,11 @@
 package org.webproject.userservice.service.impl;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,6 +19,7 @@ import org.webproject.userservice.exception.UserNotFoundException;
 import org.webproject.userservice.model.User;
 import org.webproject.userservice.service.AuthService;
 import org.webproject.userservice.service.UserService;
+import org.webproject.userservice.util.JwtTokenUtil;
 import org.webproject.userservice.util.Role;
 
 import java.util.Arrays;
@@ -32,22 +31,30 @@ public class AuthServiceImpl implements AuthService {
 
     private final UserService userService;
     private final PasswordEncoder passwordEncoder;
-    private final HttpServletRequest request;
+    private final JwtTokenUtil jwtTokenUtil;
+    private final AuthenticationManager authenticationManager;
 
     @Transactional
     @Override
     public AuthResponse login(LoginRequest request) {
-        User user = userService.findByEmail(request.getEmail())
-                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        try {
+            // Аутентификация через Spring Security
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            );
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+
+            User user = (User) authentication.getPrincipal();
+            userService.updateLastLogin(user.getId());
+
+            String token = jwtTokenUtil.generateToken(user);
+
+            return new AuthResponse(user.getId(), token, "Login successful");
+
+        } catch (Exception e) {
             throw new AuthenticationException("Invalid credentials");
         }
-
-        userService.updateLastLogin(user.getId());
-        setupSecurityContext(user);
-
-        return new AuthResponse(user.getId(), "Login successful");
     }
 
     @Override
@@ -58,39 +65,16 @@ public class AuthServiceImpl implements AuthService {
         }
 
         Role role = validateAndResolveRole(request.getRole());
+        User savedUser = userService.createUserFromRegistration(request, role);
 
-        User user = new User();
-        user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
-        user.setRole(role);
+        String token = jwtTokenUtil.generateToken(savedUser);
 
-        User savedUser = userService.createUser(user, role);
-        setupSecurityContext(savedUser);
-
-        return new AuthResponse(savedUser.getId(), "Registration successful");
-    }
-
-    private void setupSecurityContext(User user) {
-        Authentication authentication = new UsernamePasswordAuthenticationToken(
-                user, null, user.getAuthorities());
-
-        SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(authentication);
-        SecurityContextHolder.setContext(context);
-
-        HttpSession session = request.getSession(true);
-        session.setAttribute("SPRING_SECURITY_CONTEXT", context);
+        return new AuthResponse(savedUser.getId(), token, "Registration successful");
     }
 
     @Override
     public void logout() {
         SecurityContextHolder.clearContext();
-        HttpSession session = request.getSession(false);
-        if (session != null) {
-            session.invalidate();
-        }
     }
 
     @Override
@@ -101,7 +85,8 @@ public class AuthServiceImpl implements AuthService {
         }
         return null;
     }
-    private Role validateAndResolveRole(String roleRequest) {
+
+    Role validateAndResolveRole(String roleRequest) {
         try {
             Role requestedRole = Role.valueOf(roleRequest.toUpperCase());
 

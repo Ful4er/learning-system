@@ -27,7 +27,7 @@ public class AuthController {
             return ResponseEntity.ok(response);
         } catch (AuthenticationException e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new AuthResponse(null, e.getMessage()));
+                    .body(new AuthResponse(null, null, e.getMessage()));
         }
     }
 
@@ -37,22 +37,22 @@ public class AuthController {
             AuthResponse response = authService.register(request);
             return ResponseEntity.ok(response);
         } catch (EmailAlreadyExistsException | InvalidRoleException e) {
-            return ResponseEntity.badRequest().body(new AuthResponse(null, e.getMessage()));
+            return ResponseEntity.badRequest().body(new AuthResponse(null, null, e.getMessage()));
         }
     }
 
     @PostMapping("/logout")
     public ResponseEntity<AuthResponse> logout() {
         authService.logout();
-        return ResponseEntity.ok(new AuthResponse(null, "Logout successful"));
+        return ResponseEntity.ok(new AuthResponse(null, null, "Logout successful"));
     }
 
     @GetMapping("/me")
     public ResponseEntity<AuthResponse> getCurrentUser() {
         User currentUser = authService.getCurrentUser();
         if (currentUser != null) {
-            return ResponseEntity.ok(new AuthResponse(currentUser.getId(), "User authenticated"));
+            return ResponseEntity.ok(new AuthResponse(currentUser.getId(), null, "User authenticated"));
         }
-        return ResponseEntity.status(401).body(new AuthResponse(null, "Not authenticated"));
+        return ResponseEntity.status(401).body(new AuthResponse(null, null, "Not authenticated"));
     }
 }

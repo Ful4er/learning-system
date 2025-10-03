@@ -29,3 +29,6 @@ eureka:
     instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
     lease-renewal-interval-in-seconds: 5
     lease-expiration-duration-in-seconds: 15
+jwt:
+  expiration: 86400000
+  secret: mySuperSecretKeyThatIsAtLeast32CharactersLong123!

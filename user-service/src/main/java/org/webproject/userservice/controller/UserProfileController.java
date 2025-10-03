@@ -5,7 +5,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.webproject.userservice.dto.request.UserProfileRequest;
 import org.webproject.userservice.dto.response.UserProfileResponse;
+import org.webproject.userservice.model.User;
+import org.webproject.userservice.service.AuthService;
 import org.webproject.userservice.service.UserProfileService;
+import org.webproject.userservice.util.Role;
 
 @RestController
 @RequestMapping("/api/users/profiles")
@@ -13,6 +16,7 @@ import org.webproject.userservice.service.UserProfileService;
 public class UserProfileController {
 
     private final UserProfileService userProfileService;
+    private AuthService authService;
 
     @GetMapping("/{userId}")
     public ResponseEntity<UserProfileResponse> getProfileByUserId(@PathVariable Long userId) {
@@ -24,6 +28,14 @@ public class UserProfileController {
     @PutMapping("/{userId}")
     public ResponseEntity<UserProfileResponse> updateProfile(@PathVariable Long userId,
                                                              @RequestBody UserProfileRequest request) {
+        User currentUser = authService.getCurrentUser();
+        if (currentUser == null) {
+            return ResponseEntity.status(401).build();
+        }
+        if (!currentUser.getId().equals(userId) && !currentUser.getRole().equals(Role.ADMIN)) {
+            return ResponseEntity.status(403).build();
+        }
+
         UserProfileResponse updatedProfile = userProfileService.updateProfile(userId, request);
         return ResponseEntity.ok(updatedProfile);
     }

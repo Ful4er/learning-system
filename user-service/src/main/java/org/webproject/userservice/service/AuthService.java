@@ -1,6 +1,5 @@
 package org.webproject.userservice.service;
 
-import jakarta.transaction.Transactional;
 import org.webproject.userservice.dto.request.LoginRequest;
 import org.webproject.userservice.dto.request.RegisterRequest;
 import org.webproject.userservice.dto.response.AuthResponse;
