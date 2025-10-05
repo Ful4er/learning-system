@@ -9,21 +9,19 @@ import lombok.Data;
 import java.util.List;
 
 @Data
-public class AddQuestionRequest {
+public class UpdateQuestionRequest {
     @NotBlank(message = "Question text is required")
     private String text;
     
-    @NotNull(message = "Question type is required")
-    private String type; // SINGLE_CHOICE, MULTIPLE_CHOICE, TEXT
-    
     @Positive(message = "Points must be positive")
-    private Integer points = 1;
+    private Integer points;
     
     @Valid
     private List<OptionPayload> options;
 
     @Data
     public static class OptionPayload {
+        private Long id;
         @NotBlank(message = "Option text is required")
         private String text;
         

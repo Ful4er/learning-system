@@ -18,7 +18,6 @@ public class QuestionResponse {
         private Long id;
         private String text;
         private Integer orderIndex;
+        private Boolean isCorrect;
     }
 }
-
-
