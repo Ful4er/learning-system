@@ -124,5 +124,3 @@ class UserProfileServiceImplTest {
                 () -> userProfileService.updateProfile(userId, request));
     }
 }
-
-

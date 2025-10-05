@@ -2,7 +2,8 @@ package org.webproject.examservice.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import java.util.Date;
+
+import java.time.Instant;
 
 @Entity
 @Table(name = "exams")
@@ -20,9 +21,11 @@ public class Exam {
     @Column(name = "teacher_id", nullable = false)
     private Long teacherId;
 
-    @Column(name = "created_at")
-    @Temporal(TemporalType.TIMESTAMP)
-    private Date createdAt = new Date();
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt = Instant.now();
+
+    @Column(name = "updated_at")
+    private Instant updatedAt;
 
     @Column(name = "duration_minutes")
     private Integer durationMinutes;
@@ -30,6 +33,16 @@ public class Exam {
     @Column(name = "passing_score")
     private Integer passingScore;
 
-    @Column(name = "is_published")
-    private Boolean isPublished = false;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private ExamStatus status = ExamStatus.DRAFT;
+
+    @PreUpdate
+    public void preUpdate() {
+        this.updatedAt = Instant.now();
+    }
+
+    public enum ExamStatus {
+        DRAFT, PUBLISHED, ARCHIVED
+    }
 }

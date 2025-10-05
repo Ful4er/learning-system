@@ -18,7 +18,6 @@ public class JwtConfig {
 
     @Bean
     public SecretKey secretKey() {
-        // Если секрет не в Base64, кодируем его
         if (!isBase64(secret)) {
             String base64Secret = Base64.getEncoder().encodeToString(secret.getBytes());
             byte[] keyBytes = Base64.getDecoder().decode(base64Secret);
@@ -29,7 +28,6 @@ public class JwtConfig {
             byte[] keyBytes = Base64.getDecoder().decode(secret);
             return Keys.hmacShaKeyFor(keyBytes);
         } catch (IllegalArgumentException e) {
-            // Если декодирование не удалось, используем сырую строку как ключ
             return Keys.hmacShaKeyFor(secret.getBytes());
         }
     }

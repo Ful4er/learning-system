@@ -89,5 +89,3 @@ class AdminServiceImplTest {
         verify(userRepository).findByRole(Role.TEACHER);
     }
 }
-
-
