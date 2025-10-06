@@ -16,7 +16,7 @@ import org.webproject.userservice.util.Role;
 public class UserProfileController {
 
     private final UserProfileService userProfileService;
-    private AuthService authService;
+    private final AuthService authService;
 
     @GetMapping("/{userId}")
     public ResponseEntity<UserProfileResponse> getProfileByUserId(@PathVariable Long userId) {

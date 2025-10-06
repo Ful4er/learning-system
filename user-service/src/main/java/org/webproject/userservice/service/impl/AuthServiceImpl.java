@@ -3,6 +3,7 @@ package org.webproject.userservice.service.impl;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -80,11 +81,27 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof User) {
-            return (User) authentication.getPrincipal();
+
+        if (authentication == null) {
+            log.warn("No authentication found in SecurityContext");
+            return null;
         }
-        return null;
+
+        if (!authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
+            log.warn("Unauthenticated or anonymous principal");
+            return null;
+        }
+
+        Object principal = authentication.getPrincipal();
+
+        if (principal instanceof User user) {
+            return createSafeUserCopy(user);
+        } else {
+            log.error("Principal is not instance of User: {}", principal.getClass());
+            return null;
+        }
     }
+
 
     Role validateAndResolveRole(String roleRequest) {
         try {
@@ -100,5 +117,17 @@ public class AuthServiceImpl implements AuthService {
             throw new InvalidRoleException("Invalid role: " + roleRequest +
                     ". Allowed roles: " + Arrays.toString(Role.values()));
         }
+    }
+    private User createSafeUserCopy(User original) {
+        User safeUser = new User();
+        safeUser.setId(original.getId());
+        safeUser.setFirstName(original.getFirstName());
+        safeUser.setLastName(original.getLastName());
+        safeUser.setEmail(original.getEmail());
+        safeUser.setRole(original.getRole());
+        safeUser.setCreatedAt(original.getCreatedAt());
+        safeUser.setLastLogin(original.getLastLogin());
+        // НЕ копируем profile и другие поля, которые могут вызывать циклические ссылки
+        return safeUser;
     }
 }

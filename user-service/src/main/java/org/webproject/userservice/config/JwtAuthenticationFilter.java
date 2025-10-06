@@ -7,14 +7,14 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.webproject.userservice.util.JwtTokenUtil;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.Set;
 
 @Component
@@ -23,6 +23,8 @@ import java.util.Set;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenUtil jwtTokenUtil;
+    private final UserDetailsService userDetailsService;
+
     private static final String AUTH_HEADER = "Authorization";
     private static final String TOKEN_PREFIX = "Bearer ";
 
@@ -34,14 +36,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+                                    FilterChain filterChain)
+            throws ServletException, IOException {
+
         String requestPath = request.getServletPath();
         if (EXCLUDED_PATHS.contains(requestPath)) {
             filterChain.doFilter(request, response);
             return;
         }
-        String header = request.getHeader(AUTH_HEADER);
 
+        String header = request.getHeader(AUTH_HEADER);
         if (header == null || !header.startsWith(TOKEN_PREFIX)) {
             filterChain.doFilter(request, response);
             return;
@@ -52,23 +56,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             if (jwtTokenUtil.validateToken(token)) {
                 String username = jwtTokenUtil.extractUsername(token);
-                String role = jwtTokenUtil.extractRole(token);
-                Long userId = jwtTokenUtil.extractUserId(token);
 
                 if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-                    UsernamePasswordAuthenticationToken authentication =
+                    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+                    UsernamePasswordAuthenticationToken authToken =
                             new UsernamePasswordAuthenticationToken(
-                                    username,
+                                    userDetails,
                                     null,
-                                    Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role))
+                                    userDetails.getAuthorities()
                             );
 
-                    request.setAttribute("userId", userId);
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+
+                    log.debug("Authenticated user: {}", username);
                 }
+            } else {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
             }
         } catch (Exception e) {
-            log.error("JWT authentication failed: {}", e.getMessage());
+            log.error("JWT authentication failed: {}", e.getMessage(), e);
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
         }
 
         filterChain.doFilter(request, response);

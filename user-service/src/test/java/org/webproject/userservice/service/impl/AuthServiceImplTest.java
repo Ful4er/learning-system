@@ -174,19 +174,23 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void getCurrentUser_Authenticated() {
+    void getCurrentUser_Authenticated_PrincipalIsUser() {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(new UsernamePasswordAuthenticationToken(testUser, null));
+        context.setAuthentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()));
         SecurityContextHolder.setContext(context);
 
         User currentUser = authService.getCurrentUser();
 
         assertNotNull(currentUser);
-        assertEquals(testUser, currentUser);
+        assertEquals(testUser.getId(), currentUser.getId());
+        assertEquals(testUser.getEmail(), currentUser.getEmail());
+        assertEquals(testUser.getFirstName(), currentUser.getFirstName());
+        assertEquals(testUser.getLastName(), currentUser.getLastName());
+        assertEquals(testUser.getRole(), currentUser.getRole());
     }
 
     @Test
-    void getCurrentUser_NotAuthenticated() {
+    void getCurrentUser_NotAuthenticated_EmptyContext() {
         SecurityContextHolder.clearContext();
 
         User currentUser = authService.getCurrentUser();
@@ -195,14 +199,13 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void getCurrentUser_AuthenticationWithWrongPrincipalType() {
+    void getCurrentUser_PrincipalNotUser() {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(new UsernamePasswordAuthenticationToken("wrongPrincipal", null));
+        context.setAuthentication(new UsernamePasswordAuthenticationToken("someStringPrincipal", null));
         SecurityContextHolder.setContext(context);
 
         User currentUser = authService.getCurrentUser();
 
         assertNull(currentUser);
     }
-
 }
