@@ -9,3 +9,4 @@ public class QuestionNotFoundException extends RuntimeException {
         super("Question with id " + questionId + " not found");
     }
 }
+

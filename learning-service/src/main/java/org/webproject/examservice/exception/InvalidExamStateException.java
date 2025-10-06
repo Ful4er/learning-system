@@ -9,3 +9,4 @@ public class InvalidExamStateException extends RuntimeException {
         super("Invalid exam state. Current: " + currentState + ", Expected: " + expectedState);
     }
 }
+

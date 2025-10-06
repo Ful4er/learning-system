@@ -17,3 +17,4 @@ public class UpdateExamRequest {
     @Positive(message = "Passing score must be positive")
     private Integer passingScore;
 }
+

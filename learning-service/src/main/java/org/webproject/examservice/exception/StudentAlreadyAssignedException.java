@@ -9,3 +9,4 @@ public class StudentAlreadyAssignedException extends RuntimeException {
         super("Student " + studentId + " is already assigned to exam " + examId);
     }
 }
+

@@ -9,3 +9,4 @@ public class ExamAlreadyPublishedException extends RuntimeException {
         super("Exam with id " + examId + " is already published and cannot be modified");
     }
 }
+

@@ -15,3 +15,4 @@ public interface ExamAssignmentRepository extends JpaRepository<ExamAssignment, 
 }
 
 
+

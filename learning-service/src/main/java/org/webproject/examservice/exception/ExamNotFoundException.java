@@ -9,3 +9,4 @@ public class ExamNotFoundException extends RuntimeException {
         super("Exam with id " + examId + " not found");
     }
 }
+
