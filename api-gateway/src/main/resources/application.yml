@@ -17,7 +17,7 @@ spring:
             - Path=/api/users/**,/api/auth/**,/api/admin/**
 
         - id: learning-service
-          uri: lb://learning-service
+          uri: lb://exam-service
           predicates:
             - Path=/api/exams/**, /api/teacher/**, Path=/api/student/**
 

@@ -1,9 +1,9 @@
 server:
-  port: 8081
+  port: 8082
 
 spring:
   application:
-    name: user-service
+    name: exam-service
   datasource:
     url: jdbc:mysql://localhost:3306/learning_db?useSSL=false&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true
     username: root
@@ -11,7 +11,7 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.MySQLDialect
     hibernate:
-      ddl-auto: create
+      ddl-auto: update
     show-sql: true
 
 eureka:
@@ -29,10 +29,12 @@ eureka:
     instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
     lease-renewal-interval-in-seconds: 5
     lease-expiration-duration-in-seconds: 15
+
 jwt:
   expiration: 86400000
   secret: dGhpcy1pcy1hLXN1cGVyLXNlY3VyZS1zZWNyZXQta2V5LWZvci1oczM4NC1hbGdvcml0aG0tdGhhdC1pcy1sb25nLWVub3VnaC0xMjM=
 logging:
   level:
-    org.springframework.security: DEBUG
-    org.springframework.web: DEBUG
+    org.springframework.security: TRACE
+    org.springframework.security.oauth2.jwt: TRACE
+    org.springframework.security.web: DEBUG

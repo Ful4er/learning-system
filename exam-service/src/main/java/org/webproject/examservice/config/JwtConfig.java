@@ -1,7 +1,8 @@
-package org.webproject.userservice.config;
+package org.webproject.examservice.config;
 
 import io.jsonwebtoken.security.Keys;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -14,8 +15,10 @@ import java.util.Base64;
 @Configuration
 @ConfigurationProperties(prefix = "jwt")
 public class JwtConfig {
+
     @Value("${jwt.secret}")
     private String secret;
+
     private Long expiration;
 
     @Bean

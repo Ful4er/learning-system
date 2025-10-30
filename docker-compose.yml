@@ -71,7 +71,7 @@ services:
     restart: on-failure
 
   learning-service:
-    build: ./learning-service
+    build: exam-service
     container_name: learning-service
     ports:
       - "8082:8082"
