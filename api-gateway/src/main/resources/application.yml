@@ -16,10 +16,10 @@ spring:
           predicates:
             - Path=/api/users/**,/api/auth/**,/api/admin/**
 
-        - id: learning-service
+        - id: exam-service
           uri: lb://exam-service
           predicates:
-            - Path=/api/exams/**, /api/teacher/**, Path=/api/student/**
+            - Path=/api/exams/**,/api/teacher/**,/api/student/**
 
 management:
   endpoints:
