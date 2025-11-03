@@ -20,7 +20,13 @@ spring:
           uri: lb://exam-service
           predicates:
             - Path=/api/exams/**,/api/teacher/**,/api/student/**
-
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins: "*"
+            allowed-methods: "*"
+            allowed-headers: "*"
+            allow-credentials: false
 management:
   endpoints:
     web:
