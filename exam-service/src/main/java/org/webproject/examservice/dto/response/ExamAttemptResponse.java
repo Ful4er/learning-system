@@ -13,6 +13,11 @@ public class ExamAttemptResponse {
     private Instant finishedAt;
     private String status;
     private Double calculatedScore;
+
+    private Double score;
+    private Integer totalQuestions;
+    private Boolean passed;
+    private String examTitle;
 }
 
 

@@ -6,6 +6,7 @@ services:
       - "8761:8761"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
+      - EUREKA_SERVER_URL=${EUREKA_SERVER_URL:-http://eureka-server:8761/eureka/}
     networks:
       - learning-network
     healthcheck:
@@ -42,7 +43,8 @@ services:
       - learning-network
     restart: on-failure
     depends_on:
-      - api-gateway
+      api-gateway:
+        condition: service_healthy
     environment:
       - VITE_API_BASE_URL=/api
 
@@ -59,7 +61,16 @@ services:
       - learning-network
     restart: on-failure
     depends_on:
-      - eureka-server
+      eureka-server:
+        condition: service_healthy
+      mysql-db:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   user-service:
     build: ./user-service
@@ -77,8 +88,10 @@ services:
       - learning-network
     restart: on-failure
     depends_on:
-      - mysql-db
-      - eureka-server
+      mysql-db:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
 
   exam-service:
     build: ./exam-service
@@ -96,8 +109,10 @@ services:
       - learning-network
     restart: on-failure
     depends_on:
-      - mysql-db
-      - eureka-server
+      mysql-db:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
 
 volumes:
   mysql_data:

@@ -212,7 +212,10 @@ public class StudentExamServiceImpl implements StudentExamService {
         }
         
         if (request.getSelectedOptionIds() != null && !request.getSelectedOptionIds().isEmpty()) {
-            answer.setSelectedOptionIds(String.join(",", request.getSelectedOptionIds().toString()));
+            String joined = request.getSelectedOptionIds().stream()
+                    .map(String::valueOf)
+                    .collect(Collectors.joining(","));
+            answer.setSelectedOptionIds(joined);
         }
         if (request.getTextAnswer() != null) {
             answer.setTextAnswer(request.getTextAnswer());
@@ -286,6 +289,21 @@ public class StudentExamServiceImpl implements StudentExamService {
         response.setFinishedAt(attempt.getFinishedAt());
         response.setStatus(attempt.getStatus().name());
         response.setCalculatedScore(attempt.getCalculatedScore());
+
+        double scoreVal = attempt.getCalculatedScore() != null ? attempt.getCalculatedScore() : calculateScore(attempt.getId());
+        response.setScore(scoreVal);
+
+        Integer totalQ = questionRepository.findAllByExamIdOrderByIdAsc(attempt.getExamId()).size();
+        response.setTotalQuestions(totalQ);
+
+        Exam exam = examRepository.findById(attempt.getExamId()).orElse(null);
+        response.setExamTitle(exam != null ? exam.getTitle() : null);
+        Integer passing = exam != null ? exam.getPassingScore() : null;
+        boolean passed = false;
+        if (passing != null) {
+            passed = scoreVal >= passing;
+        }
+        response.setPassed(passed);
         return response;
     }
 }

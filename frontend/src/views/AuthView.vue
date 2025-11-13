@@ -11,16 +11,16 @@
       </div>
 
       <div class="auth-toggle">
-        <button 
-          class="auth-toggle-btn" 
-          :class="{ active: isLogin }"
-          @click="isLogin = true">
+        <button
+            class="auth-toggle-btn"
+            :class="{ active: isLogin }"
+            @click="isLogin = true">
           Sign In
         </button>
-        <button 
-          class="auth-toggle-btn" 
-          :class="{ active: !isLogin }"
-          @click="isLogin = false">
+        <button
+            class="auth-toggle-btn"
+            :class="{ active: !isLogin }"
+            @click="isLogin = false">
           Register
         </button>
       </div>
@@ -28,19 +28,19 @@
       <form v-if="isLogin" @submit.prevent="login" class="auth-form">
         <div class="auth-input-group">
           <label for="login-email">Email</label>
-          <input 
-            type="email" 
-            id="login-email" 
-            v-model="loginEmail" 
-            required />
+          <input
+              type="email"
+              id="login-email"
+              v-model="loginEmail"
+              required />
         </div>
         <div class="auth-input-group">
           <label for="login-password">Password</label>
-          <input 
-            type="password" 
-            id="login-password" 
-            v-model="loginPassword" 
-            required />
+          <input
+              type="password"
+              id="login-password"
+              v-model="loginPassword"
+              required />
         </div>
         <button type="submit" class="auth-submit-btn" :disabled="loading">
           Sign In
@@ -50,36 +50,36 @@
       <form v-else @submit.prevent="register" class="auth-form">
         <div class="auth-input-group">
           <label for="register-first-name">First Name</label>
-          <input 
-            type="text" 
-            id="register-first-name" 
-            v-model="registerFirstName" 
-            required />
+          <input
+              type="text"
+              id="register-first-name"
+              v-model="registerFirstName"
+              required />
         </div>
         <div class="auth-input-group">
           <label for="register-last-name">Last Name</label>
-          <input 
-            type="text" 
-            id="register-last-name" 
-            v-model="registerLastName" 
-            required />
+          <input
+              type="text"
+              id="register-last-name"
+              v-model="registerLastName"
+              required />
         </div>
         <div class="auth-input-group">
           <label for="register-email">Email</label>
-          <input 
-            type="email" 
-            id="register-email" 
-            v-model="registerEmail" 
-            required />
+          <input
+              type="email"
+              id="register-email"
+              v-model="registerEmail"
+              required />
         </div>
         <div class="auth-input-group">
           <label for="register-password">Password</label>
-          <input 
-            type="password" 
-            id="register-password" 
-            v-model="registerPassword" 
-            required 
-            minlength="6" />
+          <input
+              type="password"
+              id="register-password"
+              v-model="registerPassword"
+              required
+              minlength="6" />
         </div>
         <div class="auth-input-group">
           <label for="register-role">I am a</label>
@@ -123,25 +123,67 @@ const registerEmail = ref('');
 const registerPassword = ref('');
 const registerRole = ref('STUDENT');
 
+function getRedirectPath(userRole) {
+  switch (userRole) {
+    case 'TEACHER':
+      return '/teacher/profile';
+    case 'STUDENT':
+      return '/student/profile';
+    case 'ADMIN':
+      return '/admin/dashboard';
+    default:
+      return error;
+  }
+}
+
+async function fetchUserProfile(userId, token) {
+  try {
+    const response = await axios.get(`/api/users/${userId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (e) {
+    console.error('Failed to fetch user profile:', e);
+    return null;
+  }
+}
+
 async function login() {
   loading.value = true;
   error.value = '';
   try {
-    const res = await axios.post('/api/auth/login', { 
-      email: loginEmail.value, 
-      password: loginPassword.value 
+    const res = await axios.post('/api/auth/login', {
+      email: loginEmail.value,
+      password: loginPassword.value
     });
-    
+
     if (res.data && res.data.token) {
-      localStorage.setItem('token', res.data.token);
-      localStorage.setItem('userId', res.data.userId);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
-      
-      // Redirect based on role - you might need to fetch user info
-      router.push('/teacher/profile');
+      const { token, userId, role } = res.data;
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('userId', userId);
+      if (role) {
+        localStorage.setItem('userRole', role);
+      }
+
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      let userRole = role;
+
+      if (!userRole) {
+        const userProfile = await fetchUserProfile(userId, token);
+        userRole = userProfile?.role;
+        if (userRole) {
+          localStorage.setItem('userRole', userRole);
+        }
+      }
+
+      const redirectPath = getRedirectPath(userRole);
+      router.push(redirectPath);
     }
   } catch (e) {
     error.value = e.response?.data?.message || 'Login failed';
+    console.error('Login error:', e);
   } finally {
     loading.value = false;
   }
@@ -158,21 +200,21 @@ async function register() {
       password: registerPassword.value,
       role: registerRole.value
     });
-    
+
     if (res.data && res.data.token) {
-      localStorage.setItem('token', res.data.token);
-      localStorage.setItem('userId', res.data.userId);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${res.data.token}`;
-      
-      // Redirect based on role
-      if (registerRole.value === 'TEACHER') {
-        router.push('/teacher/profile');
-      } else {
-        router.push('/student/profile');
-      }
+      const { token, userId } = res.data;
+
+      localStorage.setItem('token', token);
+      localStorage.setItem('userId', userId);
+      localStorage.setItem('userRole', registerRole.value);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      const redirectPath = getRedirectPath(registerRole.value);
+      router.push(redirectPath);
     }
   } catch (e) {
     error.value = e.response?.data?.message || 'Registration failed';
+    console.error('Registration error:', e);
   } finally {
     loading.value = false;
   }
@@ -182,6 +224,3 @@ async function register() {
 <style>
 @import '../assets/css/auth.css';
 </style>
-
-
-
