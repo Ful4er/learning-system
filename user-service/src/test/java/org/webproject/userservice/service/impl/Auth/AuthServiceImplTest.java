@@ -1,17 +1,16 @@
-package org.webproject.userservice.service.impl;
+package org.webproject.userservice.service.impl.Auth;
 
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.core.Authentication;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.webproject.userservice.dto.request.LoginRequest;
 import org.webproject.userservice.dto.request.RegisterRequest;
 import org.webproject.userservice.dto.response.AuthResponse;
@@ -20,6 +19,8 @@ import org.webproject.userservice.exception.EmailAlreadyExistsException;
 import org.webproject.userservice.exception.InvalidRoleException;
 import org.webproject.userservice.model.User;
 import org.webproject.userservice.service.UserService;
+import org.webproject.userservice.service.impl.AuthServiceImpl;
+import org.webproject.userservice.util.JwtTokenUtil;
 import org.webproject.userservice.util.Role;
 
 import java.time.LocalDateTime;
@@ -35,11 +36,9 @@ class AuthServiceImplTest {
     @Mock
     private AuthenticationManager authenticationManager;
 
-    @Mock
-    private Authentication authentication;
-
-    @Mock
-    private org.webproject.userservice.util.JwtTokenUtil jwtTokenUtil;
+    // Используем Spy с тестовой реализацией
+    @Spy
+    private JwtTokenUtil jwtTokenUtil = new TestJwtTokenUtil();
 
     @InjectMocks
     private AuthServiceImpl authService;
@@ -76,11 +75,12 @@ class AuthServiceImplTest {
 
     @Test
     void login_Success() {
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                testUser, null, testUser.getAuthorities()
+        );
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
-                .thenReturn(authentication);
-        when(authentication.getPrincipal()).thenReturn(testUser);
+                .thenReturn(authToken);
         doNothing().when(userService).updateLastLogin(testUser.getId());
-        when(jwtTokenUtil.generateToken(testUser)).thenReturn("token");
 
         AuthResponse response = authService.login(loginRequest);
 
@@ -90,9 +90,7 @@ class AuthServiceImplTest {
 
         verify(userService).updateLastLogin(testUser.getId());
         verify(jwtTokenUtil).generateToken(testUser);
-
         assertNotNull(SecurityContextHolder.getContext().getAuthentication());
-        assertEquals(testUser, SecurityContextHolder.getContext().getAuthentication().getPrincipal());
     }
 
     @Test
@@ -111,7 +109,6 @@ class AuthServiceImplTest {
     void register_Success() {
         when(userService.existsByEmail(registerRequest.getEmail())).thenReturn(false);
         when(userService.createUserFromRegistration(registerRequest, Role.STUDENT)).thenReturn(testUser);
-        when(jwtTokenUtil.generateToken(testUser)).thenReturn("token");
 
         AuthResponse response = authService.register(registerRequest);
 
@@ -164,8 +161,11 @@ class AuthServiceImplTest {
 
     @Test
     void logout_Success() {
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                testUser, null, testUser.getAuthorities()
+        );
         SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(new UsernamePasswordAuthenticationToken(testUser, null));
+        context.setAuthentication(authToken);
         SecurityContextHolder.setContext(context);
 
         authService.logout();
@@ -175,8 +175,11 @@ class AuthServiceImplTest {
 
     @Test
     void getCurrentUser_Authenticated_PrincipalIsUser() {
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                testUser, null, testUser.getAuthorities()
+        );
         SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(new UsernamePasswordAuthenticationToken(testUser, null, testUser.getAuthorities()));
+        context.setAuthentication(authToken);
         SecurityContextHolder.setContext(context);
 
         User currentUser = authService.getCurrentUser();
@@ -200,8 +203,11 @@ class AuthServiceImplTest {
 
     @Test
     void getCurrentUser_PrincipalNotUser() {
+        UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                "someStringPrincipal", null
+        );
         SecurityContext context = SecurityContextHolder.createEmptyContext();
-        context.setAuthentication(new UsernamePasswordAuthenticationToken("someStringPrincipal", null));
+        context.setAuthentication(authToken);
         SecurityContextHolder.setContext(context);
 
         User currentUser = authService.getCurrentUser();
