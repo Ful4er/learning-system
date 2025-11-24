@@ -3,23 +3,21 @@ package org.webproject.examservice.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.webproject.examservice.client.UserServiceClient;
 import org.webproject.examservice.dto.request.AddQuestionRequest;
 import org.webproject.examservice.dto.request.AssignStudentsRequest;
 import org.webproject.examservice.dto.request.CreateExamRequest;
 import org.webproject.examservice.dto.request.UpdateExamRequest;
 import org.webproject.examservice.dto.request.UpdateQuestionRequest;
 import org.webproject.examservice.dto.response.ExamAssignmentResponse;
+import org.webproject.examservice.dto.response.ExamAttemptResponse;
 import org.webproject.examservice.dto.response.ExamResponse;
 import org.webproject.examservice.dto.response.QuestionResponse;
+import org.webproject.examservice.dto.response.StudentExamResultResponse;
+import org.webproject.examservice.dto.response.UserDto;
 import org.webproject.examservice.exception.*;
-import org.webproject.examservice.model.Exam;
-import org.webproject.examservice.model.ExamAssignment;
-import org.webproject.examservice.model.Question;
-import org.webproject.examservice.model.QuestionOption;
-import org.webproject.examservice.repository.ExamAssignmentRepository;
-import org.webproject.examservice.repository.ExamRepository;
-import org.webproject.examservice.repository.QuestionOptionRepository;
-import org.webproject.examservice.repository.QuestionRepository;
+import org.webproject.examservice.model.*;
+import org.webproject.examservice.repository.*;
 import org.webproject.examservice.service.TeacherExamService;
 
 import java.util.ArrayList;
@@ -36,6 +34,8 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     private final ExamAssignmentRepository examAssignmentRepository;
     private final QuestionRepository questionRepository;
     private final QuestionOptionRepository questionOptionRepository;
+    private final ExamAttemptRepository examAttemptRepository;
+    private final UserServiceClient userServiceClient;
 
     @Override
     @Transactional
@@ -167,7 +167,30 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<UserDto> getStudentsByTeacher(Long teacherId) {
+        List<Exam> exams = examRepository.findAllByTeacherId(teacherId);
+        List<Long> examIds = exams.stream().map(Exam::getId).collect(Collectors.toList());
+
+        List<ExamAssignment> assignments = examAssignmentRepository.findAllByExamIdIn(examIds);
+        List<Long> studentIds = assignments.stream()
+                .map(ExamAssignment::getStudentId)
+                .distinct()
+                .toList();
+
+        List<UserDto> students = new ArrayList<>();
+        for (Long studentId : studentIds) {
+            UserDto user = userServiceClient.getUserById(studentId);
+            if (user != null) {
+                students.add(user);
+            }
+        }
+        
+        return students;
+    }
+
     @Transactional
+    @Override
     public QuestionResponse addQuestion(Long examId, Long teacherId, AddQuestionRequest request) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -301,6 +324,15 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         r.setExamId(assignment.getExamId());
         r.setStudentId(assignment.getStudentId());
         r.setAssignedAt(assignment.getAssignedAt());
+
+        UserDto user = userServiceClient.getUserById(assignment.getStudentId());
+        if (user != null) {
+            r.setStudentName(user.getFirstName() + " " + user.getLastName());
+            r.setStudentFirstName(user.getFirstName());
+            r.setStudentLastName(user.getLastName());
+            r.setStudentEmail(user.getEmail());
+        }
+
         return r;
     }
 
@@ -324,6 +356,77 @@ public class TeacherExamServiceImpl implements TeacherExamService {
             return ro;
         }).collect(Collectors.toList());
         r.setOptions(mapped);
+        return r;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StudentExamResultResponse> getStudentResultsForTeacher(Long teacherId, Long studentId) {
+        List<StudentExamResultResponse> results = new ArrayList<>();
+
+        List<Exam> exams = examRepository.findAllByTeacherId(teacherId);
+        for (Exam exam : exams) {
+            StudentExamResultResponse r = new StudentExamResultResponse();
+            r.setExamId(exam.getId());
+            r.setExamTitle(exam.getTitle());
+            r.setExamStatus(exam.getStatus().name());
+            r.setPassingScore(exam.getPassingScore());
+
+            examAssignmentRepository.findByExamIdAndStudentId(exam.getId(), studentId).ifPresent(a -> {
+                r.setAssigned(true);
+                r.setAssignedAt(a.getAssignedAt());
+            });
+
+            List<ExamAttempt> attempts = examAttemptRepository.findAllByExamIdAndStudentId(exam.getId(), studentId);
+            r.setAttemptsCount(attempts.size());
+            if (!attempts.isEmpty()) {
+                ExamAttempt last = attempts.stream()
+                        .max((a, b) -> a.getStartedAt().compareTo(b.getStartedAt()))
+                        .orElse(attempts.get(attempts.size() - 1));
+                r.setLastAttemptId(last.getId());
+                r.setLastAttemptStatus(last.getStatus().name());
+                r.setLastAttemptScore(last.getCalculatedScore());
+                r.setLastAttemptFinishedAt(last.getFinishedAt());
+            }
+
+            results.add(r);
+        }
+
+        return results;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExamAttemptResponse> getExamAttemptsForTeacher(Long examId, Long teacherId) {
+        Exam exam = examRepository.findById(examId).orElseThrow(() -> new ExamNotFoundException("Exam not found"));
+        if (!Objects.equals(exam.getTeacherId(), teacherId)) {
+            throw new RuntimeException("Not authorized");
+        }
+        return new ArrayList<>();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ExamAttemptResponse getExamAttemptDetails(Long examId, Long attemptId, Long teacherId) {
+        Exam exam = examRepository.findById(examId).orElseThrow(() -> new ExamNotFoundException("Exam not found"));
+        if (!Objects.equals(exam.getTeacherId(), teacherId)) {
+            throw new RuntimeException("Not authorized");
+        }
+        ExamAttempt attempt = examAttemptRepository.findById(attemptId).orElseThrow(() -> new RuntimeException("Attempt not found"));
+        if (!Objects.equals(attempt.getExamId(), examId)) {
+            throw new RuntimeException("Attempt does not belong to this exam");
+        }
+        ExamAttemptResponse r = new ExamAttemptResponse();
+        r.setId(attempt.getId());
+        r.setExamId(attempt.getExamId());
+        r.setStudentId(attempt.getStudentId());
+        r.setStartedAt(attempt.getStartedAt());
+        r.setFinishedAt(attempt.getFinishedAt());
+        r.setStatus(attempt.getStatus().name());
+        r.setScore(attempt.getCalculatedScore() != null ? attempt.getCalculatedScore() : 0D);
+        r.setExamTitle(exam.getTitle());
+        r.setTotalQuestions(questionRepository.findAllByExamIdOrderByIdAsc(examId).size());
+        r.setPassed(r.getScore() >= exam.getPassingScore());
         return r;
     }
 }

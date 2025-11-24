@@ -14,7 +14,10 @@ import org.webproject.userservice.service.UserService;
 import org.webproject.userservice.util.Role;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
+
+import static org.webproject.userservice.util.Role.*;
 
 @Service
 @RequiredArgsConstructor
@@ -78,5 +81,14 @@ public class UserServiceImpl implements UserService {
         user.setRole(role);
 
         return createUser(user, role);
+    }
+    @Override
+    public List<User> searchStudentsByEmail(String emailPart) {
+        return userRepository.findTop10ByEmailIgnoreCaseContainingAndRole(emailPart, STUDENT);
+    }
+
+    @Override
+    public List<User> searchStudentsByName(String namePart) {
+        return userRepository.findTop10ByFirstNameIgnoreCaseContainingOrLastNameIgnoreCaseContainingAndRole(namePart, namePart, STUDENT);
     }
 }

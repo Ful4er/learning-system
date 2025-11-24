@@ -11,6 +11,9 @@ public class ExamAssignmentResponse {
     private Long studentId;
     private Instant assignedAt;
     private String studentName;
+    private String studentFirstName;
+    private String studentLastName;
+    private String studentEmail;
+    private Instant completedAt;
+    private Integer score;
 }
-
-

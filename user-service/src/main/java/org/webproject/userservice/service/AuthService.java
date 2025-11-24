@@ -10,4 +10,5 @@ public interface AuthService {
     AuthResponse register(RegisterRequest request);
     void logout();
     User getCurrentUser();
+    AuthResponse refreshToken();
 }

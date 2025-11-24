@@ -11,6 +11,7 @@ import java.util.Optional;
 public interface ExamAssignmentRepository extends JpaRepository<ExamAssignment, Long> {
     List<ExamAssignment> findAllByStudentId(Long studentId);
     List<ExamAssignment> findAllByExamId(Long examId);
+    List<ExamAssignment> findAllByExamIdIn(List<Long> examIds);
     Optional<ExamAssignment> findByExamIdAndStudentId(Long examId, Long studentId);
 }
 

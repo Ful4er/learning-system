@@ -4,6 +4,7 @@ import org.webproject.userservice.dto.request.RegisterRequest;
 import org.webproject.userservice.model.User;
 import org.webproject.userservice.util.Role;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserService {
@@ -14,4 +15,6 @@ public interface UserService {
     Optional<User> findByEmail(String email);
     void updateLastLogin(Long userId);
     User createUserFromRegistration(RegisterRequest request, Role role);
+    List<User> searchStudentsByEmail(String emailPart);
+    List<User> searchStudentsByName(String namePart);
 }

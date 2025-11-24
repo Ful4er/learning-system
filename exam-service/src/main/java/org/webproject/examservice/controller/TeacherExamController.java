@@ -11,6 +11,7 @@ import org.webproject.examservice.dto.request.CreateExamRequest;
 import org.webproject.examservice.dto.request.UpdateExamRequest;
 import org.webproject.examservice.dto.request.UpdateQuestionRequest;
 import org.webproject.examservice.dto.response.ExamAssignmentResponse;
+import org.webproject.examservice.dto.response.ExamAttemptResponse;
 import org.webproject.examservice.dto.response.ExamResponse;
 import org.webproject.examservice.dto.response.QuestionResponse;
 import org.webproject.examservice.service.TeacherExamService;
@@ -26,7 +27,6 @@ public class TeacherExamController {
     private final TeacherExamService examService;
     private final JwtUtil jwtUtil;
 
-    // Exam CRUD operations
     @PreAuthorize("hasRole('TEACHER')")
     @PostMapping
     public ResponseEntity<ExamResponse> createExam(@RequestBody CreateExamRequest request, Authentication authentication) {
@@ -108,7 +108,6 @@ public class TeacherExamController {
         return ResponseEntity.ok().build();
     }
 
-    // Question management
     @PreAuthorize("hasRole('TEACHER')")
     @PostMapping("/{examId}/questions")
     public ResponseEntity<QuestionResponse> addQuestion(@PathVariable Long examId,
@@ -147,6 +146,23 @@ public class TeacherExamController {
                                                                   Authentication authentication) {
         Long teacherId = jwtUtil.getUserId(authentication);
         return ResponseEntity.ok(examService.getExamQuestionsForTeacher(examId, teacherId));
+    }
+
+    @PreAuthorize("hasRole('TEACHER')")
+    @GetMapping("/{examId}/attempts")
+    public ResponseEntity<List<ExamAttemptResponse>> getExamAttempts(@PathVariable Long examId,
+                                                                    Authentication authentication) {
+        Long teacherId = jwtUtil.getUserId(authentication);
+        return ResponseEntity.ok(examService.getExamAttemptsForTeacher(examId, teacherId));
+    }
+
+    @PreAuthorize("hasRole('TEACHER')")
+    @GetMapping("/{examId}/attempts/{attemptId}")
+    public ResponseEntity<ExamAttemptResponse> getExamAttemptDetails(@PathVariable Long examId,
+                                                                    @PathVariable Long attemptId,
+                                                                    Authentication authentication) {
+        Long teacherId = jwtUtil.getUserId(authentication);
+        return ResponseEntity.ok(examService.getExamAttemptDetails(examId, attemptId, teacherId));
     }
 }
 

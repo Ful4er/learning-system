@@ -55,4 +55,15 @@ public class AuthController {
         }
         return ResponseEntity.status(401).body(new AuthResponse(null, null, "Not authenticated"));
     }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refreshToken() {
+        try {
+            AuthResponse response = authService.refreshToken();
+            return ResponseEntity.ok(response);
+        } catch (AuthenticationException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new AuthResponse(null, null, e.getMessage()));
+        }
+    }
 }

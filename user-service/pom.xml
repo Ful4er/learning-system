@@ -157,6 +157,7 @@
 					<argLine>
 						-XX:+EnableDynamicAgentLoading
 						-Djdk.instrument.traceUsage=false
+                        -Dnet.bytebuddy.experimental=true
 					</argLine>
 				</configuration>
 			</plugin>

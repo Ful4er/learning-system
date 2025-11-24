@@ -15,4 +15,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByRole(Role role);
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.profile WHERE u.id = :userId")
     Optional<User> findByIdWithProfile(@Param("userId") Long userId);
+    List<User> findTop10ByEmailIgnoreCaseContainingAndRole(String email, Role role);
+    List<User> findTop10ByFirstNameIgnoreCaseContainingOrLastNameIgnoreCaseContainingAndRole(String firstName, String lastName, Role role);
 }
