@@ -1,31 +1,10 @@
 <template>
   <div>
-    <nav class="nav-bar">
-      <div class="container">
-        <div class="nav-content">
-          <ul class="nav-links">
-            <li>
-              <router-link to="/teacher/profile" class="nav-link active">Profile</router-link>
-            </li>
-            <li>
-              <router-link to="/teacher/exams" class="nav-link">Exams</router-link>
-            </li>
-            <li>
-              <router-link to="/teacher/students" class="nav-link">My Students</router-link>
-            </li>
-          </ul>
-          <button class="notification-btn">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12.5 14.1667H16.6667L15.4959 12.9958C15.3386 12.8386 15.2139 12.6519 15.1289 12.4464C15.0438 12.2409 15 12.0207 15 11.7983V9.16667C15.0002 8.13245 14.6797 7.12362 14.0827 6.27907C13.4858 5.43453 12.6417 4.7958 11.6667 4.45083V4.16667C11.6667 3.72464 11.4911 3.30072 11.1786 2.98816C10.866 2.67559 10.4421 2.5 10 2.5C9.55801 2.5 9.13409 2.67559 8.82153 2.98816C8.50897 3.30072 8.33337 3.72464 8.33337 4.16667V4.45083C6.39171 5.1375 5.00004 6.99 5.00004 9.16667V11.7992C5.00004 12.2475 4.82171 12.6783 4.50421 12.9958L3.33337 14.1667H7.50004M12.5 14.1667V15C12.5 15.663 12.2366 16.2989 11.7678 16.7678C11.299 17.2366 10.6631 17.5 10 17.5C9.337 17.5 8.70111 17.2366 8.23227 16.7678C7.76343 16.2989 7.50004 15.663 7.50004 15V14.1667M12.5 14.1667H7.50004" stroke="#3870EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </nav>
+    <NavBar :links="links" />
 
     <main class="main-content">
       <div class="container">
-        <div class="dashboard-layout">
+        <div class="dashboard-layout-profile">
           <section class="profile-card">
             <span class="profile-image">
               {{ initials }}
@@ -47,7 +26,7 @@
           </section>
 
           <section class="action-cards">
-            <div class="action-card">
+            <router-link to="/teacher/students" class="action-card action-link">
               <h2 class="card-title">My students</h2>
               <button class="add-button">
                 <svg width="41" height="40" viewBox="0 0 41 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -56,9 +35,9 @@
                   <line x1="10.5253" y1="20" x2="30.5253" y2="20" stroke="#2563EB" stroke-opacity="0.7" stroke-width="2"/>
                 </svg>
               </button>
-            </div>
+            </router-link>
 
-            <div class="action-card">
+            <router-link to="/teacher/exams" class="action-card action-link">
               <h2 class="card-title">My exams</h2>
               <button class="add-button">
                 <svg width="41" height="40" viewBox="0 0 41 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -67,7 +46,7 @@
                   <line x1="10.7091" y1="20" x2="30.7091" y2="20" stroke="#2563EB" stroke-opacity="0.7" stroke-width="2"/>
                 </svg>
               </button>
-            </div>
+            </router-link>
           </section>
         </div>
       </div>
@@ -78,7 +57,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
+import api from '../../api';
+import NavBar from '../../components/NavBar.vue';
+
+const links = [
+  { to: '/teacher/profile', label: 'Profile' },
+  { to: '/teacher/exams', label: 'Exams' },
+  { to: '/teacher/students', label: 'My Students' }
+];
 
 const router = useRouter();
 
@@ -97,20 +83,17 @@ async function fetchProfile() {
       router.push('/auth');
       return;
     }
-    
-    // Fetch user data
-    const userRes = await axios.get('/api/users/me');
+
+    const userRes = await api.users.me();
     user.value = userRes.data;
-    
-    // Fetch exams to get counts
-    const examsRes = await axios.get('/api/teacher/exams');
+
+    const examsRes = await api.teacherExams.list();
     examCount.value = examsRes.data?.length || 0;
-    
-    // Get unique student count from all exam assignments
+
     const studentMap = new Set();
     for (const exam of examsRes.data) {
       try {
-        const assignmentsRes = await axios.get(`/api/teacher/exams/${exam.id}/assignments`);
+        const assignmentsRes = await api.teacherExams.assignments(exam.id);
         assignmentsRes.data.forEach(a => studentMap.add(a.studentId));
       } catch (error) {
         // Skip if can't fetch assignments
@@ -126,9 +109,269 @@ async function fetchProfile() {
 }
 
 onMounted(fetchProfile);
+
+function logout() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('userId');
+  localStorage.removeItem('userRole');
+  router.push('/auth');
+}
 </script>
 
 <style>
-@import '../../assets/css/teacher/profile.css';
+:root {
+  --primary-blue: #2563eb;
+  --secondary-blue: #3870EC;
+  --light-blue: #F0F5FF;
+  --text-dark: #1A1A1A;
+  --text-gray: #666666;
+  --light-gray: #F6F5F5;
+  --border-color: #E6E6E6;
+  --white: #FFFFFF;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--light-blue);
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1140px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+
+.main-content {
+  padding: 40px 0;
+}
+
+.dashboard-layout-profile {
+  gap: 31px;
+}
+
+.profile-card {
+  width: 100%;
+  max-width: 348px;
+  background-color: var(--white);
+  border-radius: 12px;
+  box-shadow: 0px 4px 24px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.profile-image {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  background-color: var(--primary-blue);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 36px;
+  text-transform: uppercase;
+}
+
+.profile-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin: 0;
+  text-align: center;
+}
+
+.profile-email {
+  font-size: 14px;
+  color: var(--text-gray);
+  margin-top: 8px;
+  margin-bottom: 0;
+  text-align: center;
+  word-break: break-all;
+}
+
+.stats-section {
+  width: 100%;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.stats-grid {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: var(--text-gray);
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.action-cards {
+  flex: 1;
+  min-width: 0;
+}
+
+.action-card {
+  background-color: var(--white);
+  border-radius: 12px;
+  box-shadow: 0px 4px 24px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+}
+
+.action-card.action-link {
+  color: inherit;
+}
+
+.action-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0px 6px 28px rgba(0, 0, 0, 0.12);
+}
+
+.action-card:last-child {
+  margin-bottom: 0;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.add-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.add-button:hover {
+  transform: scale(1.05);
+}
+
+.add-button svg circle {
+  transition: fill 0.2s ease;
+}
+
+.add-button:hover svg circle {
+  fill: #e0e0e0;
+}
+.dashboard-layout-profile {
+  display: flex;
+  flex-direction: row;
+}
+@media (max-width: 992px) {
+  .dashboard-layout-profile {
+    gap: 20px;
+  }
+
+  .stats-grid {
+    gap: 30px;
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-layout-profile {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .profile-card {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .main-content {
+    padding: 20px 0;
+  }
+
+  .profile-image {
+    width: 100px;
+    height: 100px;
+    font-size: 30px;
+  }
+
+  .profile-name {
+    font-size: 18px;
+  }
+
+  .stats-grid {
+    gap: 20px;
+  }
+
+  .stat-number {
+    font-size: 20px;
+  }
+
+  .action-card {
+    padding: 16px;
+  }
+
+  .card-title {
+    font-size: 16px;
+  }
+
+  .add-button svg {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (max-width: 400px) {
+
+  .profile-image {
+    width: 80px;
+    height: 80px;
+    font-size: 24px;
+  }
+
+  .stats-grid {
+    gap: 16px;
+  }
+
+  .stat-number {
+    font-size: 18px;
+  }
+
+  .stat-label {
+    font-size: 12px;
+  }
+}
 </style>
 

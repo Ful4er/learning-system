@@ -1,22 +1,6 @@
 <template>
   <div>
-    <nav class="nav-bar">
-      <div class="container">
-        <div class="nav-content">
-          <ul class="nav-links">
-            <li><router-link to="/student/profile" class="nav-link">Dashboard</router-link></li>
-            <li><router-link to="/student/exams" class="nav-link active">Exams</router-link></li>
-          </ul>
-          <button class="notification-btn" @click="logout" aria-label="Logout" title="Logout">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="#3870EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-              <polyline points="16 17 21 12 16 7" stroke="#3870EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12" stroke="#3870EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></line>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </nav>
+    <NavBar :links="links" />
 
     <main class="main-content">
       <div class="container">
@@ -34,40 +18,8 @@
           </div>
 
           <div v-else class="exams-grid">
-            <div v-for="exam in exams" :key="exam.id" class="exam-card">
-              <div class="exam-card-header">
-                <div class="exam-icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                  </svg>
-                </div>
-                <div style="flex: 1;">
-                  <h3 class="exam-card-title">{{ exam.title }}</h3>
-                </div>
-              </div>
-
-              <p v-if="exam.description" class="exam-card-description">{{ exam.description }}</p>
-
-              <div class="exam-meta">
-                <div class="exam-meta-item">
-                  <span>⏱️ {{ exam.durationMinutes }} min</span>
-                </div>
-                <div class="exam-meta-item">
-                  <span>✓ {{ exam.questionCount || 0 }} questions</span>
-                </div>
-              </div>
-
-              <div v-if="exam.passingScore" class="exam-meta" style="margin-top: 0;">
-                <div class="exam-meta-item">
-                  <span>Pass: {{ exam.passingScore }}/100</span>
-                </div>
-              </div>
-
-              <div class="exam-actions">
+            <ExamCard v-for="exam in exams" :key="exam.id" :exam="exam">
+              <template #actions>
                 <button 
                   @click="startExam(exam)"
                   class="exam-btn exam-btn-primary"
@@ -81,8 +33,8 @@
                 >
                   Details
                 </button>
-              </div>
-            </div>
+              </template>
+            </ExamCard>
           </div>
         </div>
       </div>
@@ -93,8 +45,14 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
 import api from '../../api';
+import NavBar from '../../components/NavBar.vue';
+import ExamCard from '../../components/ExamCard.vue';
+
+const links = [
+  { to: '/student/profile', label: 'Dashboard' },
+  { to: '/student/exams', label: 'Exams' }
+];
 
 const router = useRouter();
 const exams = ref([]);
@@ -103,13 +61,13 @@ const startingAttemptFor = ref(null);
 
 async function logout() {
   try {
+    await api.auth.logout().catch(() => {});
+  } catch (error) {
+    console.error('Logout error (server):', error);
+  } finally {
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
     localStorage.removeItem('userRole');
-    delete axios.defaults.headers.common['Authorization'];
-    router.push('/auth');
-  } catch (error) {
-    console.error('Logout error:', error);
     router.push('/auth');
   }
 }
@@ -156,8 +114,9 @@ async function startExam(exam) {
 }
 
 onMounted(fetchExams);
+
 </script>
 
 <style scoped>
-@import '../../styles/student.css';
+@import '../../assets/css/teacher/profile.css';
 </style>

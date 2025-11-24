@@ -1,15 +1,30 @@
 import axios from 'axios';
 
+axios.defaults.baseURL = import.meta.env.VITE_API_BASE || '';
+
+axios.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers['Authorization'] = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export default {
   auth: {
     login: (email, password) => axios.post('/api/auth/login', { email, password }),
     register: (payload) => axios.post('/api/auth/register', payload),
-    logout: () => axios.post('/api/auth/logout')
+    logout: () => axios.post('/api/auth/logout'),
+    refresh: () => axios.post('/api/auth/refresh')
   },
 
   users: {
     me: () => axios.get('/api/users/me'),
     byId: (id) => axios.get(`/api/users/${id}`)
+  },
+  usersSearch: {
+    byEmail: (email) => axios.get('/api/users/search', { params: { email } })
   },
 
   studentExams: {
@@ -30,16 +45,22 @@ export default {
     update: (examId, payload) => axios.put(`/api/teacher/exams/${examId}`, payload),
     delete: (examId) => axios.delete(`/api/teacher/exams/${examId}`),
     details: (examId) => axios.get(`/api/teacher/exams/${examId}`),
-    students: (examId) => axios.get(`/api/teacher/exams/${examId}/students`),
-    addStudent: (examId, studentEmail) => axios.post(`/api/teacher/exams/${examId}/students`, { email: studentEmail }),
-    removeStudent: (examId, studentId) => axios.delete(`/api/teacher/exams/${examId}/students/${studentId}`),
+    assignments: (examId) => axios.get(`/api/teacher/exams/${examId}/assignments`),
+    assign: (examId, studentIds) => axios.post(`/api/teacher/exams/${examId}/assign`, { studentIds }),
+    removeAssignment: (examId, studentId) => axios.delete(`/api/teacher/exams/${examId}/assignments/${studentId}`),
     attempts: (examId) => axios.get(`/api/teacher/exams/${examId}/attempts`),
     attemptDetails: (examId, attemptId) => axios.get(`/api/teacher/exams/${examId}/attempts/${attemptId}`)
+    ,
+    // Questions
+    addQuestion: (examId, payload) => axios.post(`/api/teacher/exams/${examId}/questions`, payload),
+    getExamQuestions: (examId) => axios.get(`/api/teacher/exams/${examId}/questions`),
+    updateQuestion: (questionId, payload) => axios.put(`/api/teacher/exams/questions/${questionId}`, payload),
+    deleteQuestion: (questionId) => axios.delete(`/api/teacher/exams/questions/${questionId}`)
   },
 
   teacherStudents: {
     list: () => axios.get('/api/teacher/students'),
-    details: (studentId) => axios.get(`/api/teacher/students/${studentId}`),
+    details: (studentId) => axios.get(`/api/users/${studentId}`),
     results: (studentId) => axios.get(`/api/teacher/students/${studentId}/results`)
   },
 
@@ -53,3 +74,4 @@ export default {
     update: (payload) => axios.put('/api/student/profile', payload)
   }
 };
+

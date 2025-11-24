@@ -77,7 +77,7 @@ body {
 }
 
 .notification-btn {
-  margin-top: 20px;
+  margin-top: 2px;
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -99,7 +99,6 @@ body {
 }
 
 .dashboard-layout {
-  display: flex;
   gap: 31px;
 }
 
@@ -194,6 +193,11 @@ body {
   align-items: center;
   margin-bottom: 20px;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+}
+
+.action-card.action-link {
+  color: inherit;
 }
 
 .action-card:hover {
@@ -231,7 +235,10 @@ body {
 .add-button:hover svg circle {
   fill: #e0e0e0;
 }
-
+.dashboard-layout {
+    display: flex;
+    flex-direction: row;
+}
 @media (max-width: 992px) {
   .dashboard-layout {
     gap: 20px;

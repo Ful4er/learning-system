@@ -106,7 +106,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
+import api from '../api';
 
 const router = useRouter();
 
@@ -138,9 +138,7 @@ function getRedirectPath(userRole) {
 
 async function fetchUserProfile(userId, token) {
   try {
-    const response = await axios.get(`/api/users/${userId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const response = await api.users.byId(userId);
     return response.data;
   } catch (e) {
     console.error('Failed to fetch user profile:', e);
@@ -152,10 +150,7 @@ async function login() {
   loading.value = true;
   error.value = '';
   try {
-    const res = await axios.post('/api/auth/login', {
-      email: loginEmail.value,
-      password: loginPassword.value
-    });
+    const res = await api.auth.login(loginEmail.value, loginPassword.value);
 
     if (res.data && res.data.token) {
       const { token, userId, role } = res.data;
@@ -165,8 +160,6 @@ async function login() {
       if (role) {
         localStorage.setItem('userRole', role);
       }
-
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
       let userRole = role;
 
@@ -193,7 +186,7 @@ async function register() {
   loading.value = true;
   error.value = '';
   try {
-    const res = await axios.post('/api/auth/register', {
+    const res = await api.auth.register({
       firstName: registerFirstName.value,
       lastName: registerLastName.value,
       email: registerEmail.value,
@@ -207,7 +200,6 @@ async function register() {
       localStorage.setItem('token', token);
       localStorage.setItem('userId', userId);
       localStorage.setItem('userRole', registerRole.value);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
       const redirectPath = getRedirectPath(registerRole.value);
       router.push(redirectPath);
@@ -222,5 +214,172 @@ async function register() {
 </script>
 
 <style>
-@import '../assets/css/auth.css';
+:root {
+  --primary: #2563eb;
+  --primary-hover: #3870EC;
+  --bg: #f8fafc;
+  --white: #ffffff;
+  --text: #1e293b;
+  --text-light: #64748b;
+  --border: #e2e8f0;
+  --error-bg: #fef2f2;
+  --error: #dc2626;
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --radius: 12px;
+  --input-radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.auth-card {
+  background: var(--white);
+  width: 100%;
+  max-width: 420px;
+  padding: 32px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.auth-header h1 {
+  font-size: 30px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.auth-header p {
+  color: var(--text-light);
+}
+
+.auth-error-message {
+  background: var(--error-bg);
+  color: var(--error);
+  padding: 12px;
+  border-radius: var(--input-radius);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.auth-toggle {
+  display: flex;
+  background: #f1f5f9;
+  border-radius: var(--input-radius);
+  padding: 4px;
+  margin-bottom: 24px;
+}
+
+.auth-toggle-btn {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-light);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.auth-toggle-btn.active {
+  background: var(--white);
+  color: var(--primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-form.hidden {
+  display: none;
+}
+
+.auth-input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-input-group label {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.auth-input-group input,
+.auth-input-group select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--input-radius);
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.auth-input-group input:focus,
+.auth-input-group select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.auth-submit-btn {
+  width: 100%;
+  padding: 10px 16px;
+  background: var(--primary);
+  color: var(--white);
+  border: none;
+  border-radius: var(--input-radius);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.auth-submit-btn:hover {
+  background: var(--primary-hover);
+}
+
+.auth-footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-light);
+}
+
+.auth-footer a {
+  color: var(--primary);
+  font-weight: 500;
+  margin-left: 4px;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.auth-footer a:hover {
+  color: var(--primary-hover);
+}
 </style>

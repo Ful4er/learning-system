@@ -1,22 +1,6 @@
 <template>
   <div>
-    <nav class="nav-bar">
-      <div class="container">
-        <div class="nav-content">
-          <ul class="nav-links">
-            <li><router-link to="/student/profile" class="nav-link">Dashboard</router-link></li>
-            <li><router-link to="/student/exams" class="nav-link">Exams</router-link></li>
-          </ul>
-          <button class="notification-btn" @click="logout" aria-label="Logout" title="Logout">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="#3870EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-              <polyline points="16 17 21 12 16 7" stroke="#3870EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></polyline>
-              <line x1="21" y1="12" x2="9" y2="12" stroke="#3870EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></line>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </nav>
+    <NavBar :links="links" />
 
     <main class="main-content">
       <div class="container">
@@ -90,9 +74,15 @@
                     <div v-else-if="q.type === 'TEXT'" class="text-answer-group">
                       <textarea
                         v-model="textAnswers[q.id]"
+                        @input="onTextChange(q.id)"
                         placeholder="Type your answer here..."
                         style="width: 100%; min-height: 100px; padding: 12px; border: 1px solid #E6E6E6; border-radius: 8px; font-family: inherit; font-size: 14px;"
                       ></textarea>
+                      <div style="margin-top:8px; font-size:12px; color:#666;">
+                        <span v-if="savingState[q.id] === 'saving'">Saving...</span>
+                        <span v-else-if="savingState[q.id] === 'saved'">Saved</span>
+                        <span v-else-if="savingState[q.id] === 'error'">Save failed</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -132,10 +122,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import axios from 'axios';
 import api from '../../api';
+import NavBar from '../../components/NavBar.vue';
+
+const links = [
+  { to: '/student/profile', label: 'Dashboard' },
+  { to: '/student/exams', label: 'Exams' }
+];
 
 const route = useRoute();
 const router = useRouter();
@@ -150,6 +145,11 @@ const attempt = ref(null);
 const selectedAnswers = ref({});
 const textAnswers = ref({});
 
+// autosave state: per-question saving indicator and debounce timers
+const savingState = ref({}); // { [questionId]: 'idle'|'saving'|'saved'|'error' }
+const saveTimers = {};
+const dirtyQuestions = ref(new Set());
+
 const timeRemaining = computed(() => {
   if (!attempt.value?.expiresAt) return 'N/A';
   const now = new Date();
@@ -163,13 +163,13 @@ const timeRemaining = computed(() => {
 
 async function logout() {
   try {
+    await api.auth.logout().catch(() => {});
+  } catch (error) {
+    console.error('Logout error (server):', error);
+  } finally {
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
     localStorage.removeItem('userRole');
-    delete axios.defaults.headers.common['Authorization'];
-    router.push('/auth');
-  } catch (error) {
-    console.error('Logout error:', error);
     router.push('/auth');
   }
 }
@@ -197,25 +197,63 @@ function onOptionChange(questionId, optionId, event) {
       selectedAnswers.value[questionId].delete(optionId);
     }
   }
+  // trigger debounced save
+  // mark as dirty so we can warn on unload
+  dirtyQuestions.value.add(questionId);
+  debouncedSaveAnswer(questionId);
+}
+
+function onTextChange(questionId) {
+  // mark as dirty and trigger debounced save when text changes
+  dirtyQuestions.value.add(questionId);
+  debouncedSaveAnswer(questionId);
 }
 
 async function saveAnswer(questionId) {
+  savingState.value[questionId] = 'saving';
   try {
     const selectedOptions = selectedAnswers.value[questionId] 
       ? Array.from(selectedAnswers.value[questionId]) 
       : [];
     const textAnswer = textAnswers.value[questionId] || null;
-    
+
     await api.studentExams.submitAnswer(attemptId, {
       questionId,
       selectedOptionIds: selectedOptions,
       textAnswer
     });
-    
+
+    savingState.value[questionId] = 'saved';
+    // remove dirty mark for this question
+    dirtyQuestions.value.delete(questionId);
+    // reset to idle after a short delay
+    setTimeout(() => {
+      if (savingState.value[questionId] === 'saved') savingState.value[questionId] = 'idle';
+    }, 1200);
   } catch (e) {
     console.error('Failed to save answer:', e);
-    alert(`Failed to save answer: ${e.response?.data?.message || e.message}`);
+    savingState.value[questionId] = 'error';
+    // if save failed (e.g. offline), persist draft locally so user doesn't lose changes
+    try {
+      const draftKey = `attempt_draft_${attemptId}`;
+      const payload = {
+        selectedAnswers: Object.fromEntries(Object.entries(selectedAnswers.value).map(([k, set]) => [k, Array.from(set)])),
+        textAnswers: textAnswers.value
+      };
+      localStorage.setItem(draftKey, JSON.stringify(payload));
+      // leave dirty mark so beforeunload will warn
+      dirtyQuestions.value.add(questionId);
+    } catch (ee) {}
   }
+}
+
+function debouncedSaveAnswer(questionId) {
+  if (saveTimers[questionId]) clearTimeout(saveTimers[questionId]);
+  savingState.value[questionId] = 'idle';
+  saveTimers[questionId] = setTimeout(() => {
+    saveAnswer(questionId);
+    delete saveTimers[questionId];
+  }, 800);
 }
 
 async function loadAttempt() {
@@ -241,6 +279,19 @@ async function loadAttempt() {
           }
         });
       }
+      // restore local draft if any (fallback when offline or before saved to server)
+      try {
+        const draftKey = `attempt_draft_${attemptId}`;
+        const draft = localStorage.getItem(draftKey);
+        if (draft) {
+          const parsed = JSON.parse(draft);
+          // merge selectedOptions
+          Object.keys(parsed.selectedAnswers || {}).forEach(qid => {
+            selectedAnswers.value[qid] = new Set(parsed.selectedAnswers[qid]);
+          });
+          Object.assign(textAnswers.value, parsed.textAnswers || {});
+        }
+      } catch (e) {}
     } catch (e) {
       console.error('Could not load attempt details:', e);
       attempt.value = null;
@@ -276,10 +327,31 @@ async function finishAttempt() {
 }
 
 onMounted(loadAttempt);
+
+// Warn user about unsaved changes when trying to close or reload the page
+function handleBeforeUnload(e) {
+  const hasSaving = Object.values(savingState.value).some(s => s === 'saving');
+  const hasError = Object.values(savingState.value).some(s => s === 'error');
+  const hasDirty = dirtyQuestions.value && dirtyQuestions.value.size > 0;
+  if (hasSaving || hasError || hasDirty) {
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+});
+
 </script>
 
 <style scoped>
-@import '../../styles/student.css';
+@import '../../assets/css/teacher/profile.css';
 
 .questions-container {
   display: grid;

@@ -8,11 +8,11 @@ import StudentExamAttemptView from './views/student/StudentExamAttemptView.vue';
 
 export default [
   { path: '/', redirect: '/auth' },
-  { path: '/auth', component: AuthView },
-  { path: '/teacher/profile', component: TeacherProfileView },
-  { path: '/teacher/exams', component: TeacherExamsView },
-  { path: '/teacher/students', component: TeacherStudentsView }
-  ,{ path: '/student/profile', component: StudentProfileView }
-  ,{ path: '/student/exams', component: StudentExamsView }
-  ,{ path: '/student/exams/:examId/attempt/:attemptId', component: StudentExamAttemptView }
+  { path: '/auth', component: AuthView, meta: { guest: true } },
+  { path: '/teacher/profile', component: TeacherProfileView, meta: { requiresAuth: true } },
+  { path: '/teacher/exams', component: TeacherExamsView, meta: { requiresAuth: true } },
+  { path: '/teacher/students', component: TeacherStudentsView, meta: { requiresAuth: true } },
+  { path: '/student/profile', component: StudentProfileView, meta: { requiresAuth: true } },
+  { path: '/student/exams', component: StudentExamsView, meta: { requiresAuth: true } },
+  { path: '/student/exams/:examId/attempt/:attemptId', component: StudentExamAttemptView, meta: { requiresAuth: true } }
 ];

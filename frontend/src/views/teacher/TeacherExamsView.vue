@@ -1,34 +1,13 @@
 <template>
-  <div>
-    <nav class="nav-bar">
-      <div class="container">
-        <div class="nav-content">
-          <ul class="nav-links">
-            <li>
-              <router-link to="/teacher/profile" class="nav-link">Profile</router-link>
-            </li>
-            <li>
-              <router-link to="/teacher/exams" class="nav-link active">Exams</router-link>
-            </li>
-            <li>
-              <router-link to="/teacher/students" class="nav-link">My Students</router-link>
-            </li>
-          </ul>
-          <button class="notification-btn">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12.5 14.1667H16.6667L15.4959 12.9958C15.3386 12.8386 15.2139 12.6519 15.1289 12.4464C15.0438 12.2409 15 12.0207 15 11.7983V9.16667C15.0002 8.13245 14.6797 7.12362 14.0827 6.27907C13.4858 5.43453 12.6417 4.7958 11.6667 4.45083V4.16667C11.6667 3.72464 11.4911 3.30072 11.1786 2.98816C10.866 2.67559 10.4421 2.5 10 2.5C9.55801 2.5 9.13409 2.67559 8.82153 2.98816C8.50897 3.30072 8.33337 3.72464 8.33337 4.16667V4.45083C6.39171 5.1375 5.00004 6.99 5.00004 9.16667V11.7992C5.00004 12.2475 4.82171 12.6783 4.50421 12.9958L3.33337 14.1667H7.50004M12.5 14.1667V15C12.5 15.663 12.2366 16.2989 11.7678 16.7678C11.299 17.2366 10.6631 17.5 10 17.5C9.337 17.5 8.70111 17.2366 8.23227 16.7678C7.76343 16.2989 7.50004 15.663 7.50004 15V14.1667M12.5 14.1667H7.50004" stroke="#3870EC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-    </nav>
+  <div class="teacher-exams">
+    <NavBar :links="links" />
 
     <main class="main-content">
       <div class="container">
-        <div class="dashboard-layout">
+        <div class="dashboard-layout-exams">
           <div class="header-section">
-            <h2 class="card-title">My exams</h2>
-            <button @click="showExamModal = true" class="add-button">
+            <h2 class="card-title">My Exams</h2>
+            <button @click="showExamModal = true" class="add-button" aria-label="Add new exam">
               <svg width="41" height="40" viewBox="0 0 41 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="20.5251" cy="20" r="20" fill="#F6F5F5" />
                 <line y1="-1" x2="20" y2="-1" transform="matrix(0 1 1 0 21.5253 10)" stroke="#2563EB" stroke-opacity="0.7" stroke-width="2"/>
@@ -37,11 +16,14 @@
             </button>
           </div>
 
-          <!-- Create Exam Modal -->
-          <div v-if="showExamModal" class="modal" @click.self="showExamModal = false">
+          <!-- Create/Edit Exam Modal -->
+          <div v-if="showExamModal" class="modal" @click.self="closeCreateModal">
             <div class="modal-content">
-              <span class="close" @click="showExamModal = false">&times;</span>
-              <h2>Add New Exam</h2>
+              <span class="close" @click="closeCreateModal">&times;</span>
+              <h2>{{ isEditingExam ? 'Edit Exam' : 'Add New Exam' }}</h2>
+
+              <div v-if="createError" class="message error">{{ createError }}</div>
+
               <form @submit.prevent="createExam">
                 <div class="form-group">
                   <label for="title">Title:</label>
@@ -53,20 +35,23 @@
                 </div>
                 <div class="form-group">
                   <label for="duration">Duration (minutes):</label>
-                  <input type="number" id="duration" v-model.number="newExam.durationMinutes" required>
+                  <input type="number" id="duration" v-model.number="newExam.durationMinutes" required min="1">
                 </div>
                 <div class="form-group">
-                  <label for="passingScore">Passing Score:</label>
-                  <input type="number" id="passingScore" v-model.number="newExam.passingScore" required>
+                  <label for="passingScore">Passing Score (%):</label>
+                  <input type="number" id="passingScore" v-model.number="newExam.passingScore" required min="0" max="100">
                 </div>
-                <button type="submit" class="submit-btn">Create Exam</button>
+                <div class="form-actions">
+                  <button type="submit" class="submit-btn primary">{{ isEditingExam ? 'Update Exam' : 'Create Exam' }}</button>
+                  <button type="button" class="submit-btn secondary" @click="closeCreateModal">Cancel</button>
+                </div>
               </form>
             </div>
           </div>
 
           <!-- Exam Details Modal -->
           <div v-if="selectedExam" class="modal" @click.self="selectedExam = null">
-            <div class="modal-content">
+            <div class="modal-content wide-modal">
               <span class="close" @click="selectedExam = null">&times;</span>
               <div class="exam-details">
                 <div class="exam-header">
@@ -87,16 +72,12 @@
                   <h3>Exam Information</h3>
                   <div class="info-grid">
                     <div class="info-item">
-                      <span class="info-label">Created at:</span>
-                      <span class="info-value">{{ formatDate(selectedExam.createdAt) }}</span>
-                    </div>
-                    <div class="info-item">
                       <span class="info-label">Duration:</span>
                       <span class="info-value">{{ selectedExam.durationMinutes }} minutes</span>
                     </div>
                     <div class="info-item">
                       <span class="info-label">Passing Score:</span>
-                      <span class="info-value">{{ selectedExam.passingScore }}</span>
+                      <span class="info-value">{{ selectedExam.passingScore }}%</span>
                     </div>
                     <div class="info-item">
                       <span class="info-label">Total Students:</span>
@@ -108,72 +89,107 @@
                 <div class="exam-students-section">
                   <h3>Enrolled Students</h3>
                   <div class="add-student-section">
-                    <h3>Add Student by Email</h3>
+                    <h4>Add Student by Email</h4>
                     <div class="add-student-form">
-                      <input type="email" v-model="studentEmail" placeholder="Enter student's email">
+                      <div class="email-input-wrapper">
+                        <input
+                            type="email"
+                            v-model="studentEmail"
+                            @input="onEmailInput"
+                            @focus="showSearchResults = true"
+                            @blur="hideSearchResults"
+                            placeholder="Enter student's email"
+                            class="email-input">
+                        <div v-if="showSearchResults && searchResults.length > 0" class="search-dropdown">
+                          <div v-for="student in searchResults" :key="student.id"
+                               class="search-result-item"
+                               @mousedown="selectStudentFromSearch(student)">
+                            <strong>{{ student.firstName }} {{ student.lastName }}</strong>
+                            <small>{{ student.email }}</small>
+                          </div>
+                        </div>
+                      </div>
                       <button @click="addStudentToExam" class="add-student-btn" :disabled="!studentEmail">Add Student</button>
                     </div>
                     <div v-if="addStudentMessage" :class="['message', addStudentMessageType]">
                       {{ addStudentMessage }}
                     </div>
                   </div>
-                  <table class="results-table">
-                    <thead>
+
+                  <div class="students-table-container">
+                    <table class="results-table">
+                      <thead>
                       <tr>
-                        <th>Student</th>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Email</th>
                         <th>Status</th>
                         <th>Score</th>
                         <th>Completed</th>
                         <th>Actions</th>
                       </tr>
-                    </thead>
-                    <tbody>
+                      </thead>
+                      <tbody>
                       <tr v-if="studentAssignments.length === 0">
-                        <td colspan="5">No students enrolled yet</td>
+                        <td colspan="7" class="no-data">No students enrolled yet</td>
                       </tr>
                       <tr v-for="assignment in studentAssignments" :key="assignment.id">
-                        <td>
-                          <div class="student-info">
-                            <div class="student-avatar small">
-                              {{ getInitials(assignment.studentName) }}
-                            </div>
-                            <div>
-                              <div class="student-name">{{ assignment.studentName }}</div>
-                              <div class="student-email">{{ assignment.studentEmail }}</div>
-                            </div>
-                          </div>
+                        <td class="name-cell">
+                          {{ assignment.studentFirstName || 'N/A' }}
+                        </td>
+                        <td class="name-cell">
+                          {{ assignment.studentLastName || 'N/A' }}
+                        </td>
+                        <td class="email-cell">
+                          {{ assignment.studentEmail || 'N/A' }}
                         </td>
                         <td>
-                          <span :class="['status', assignment.completedAt ? 'completed' : 'pending']">
-                            {{ assignment.completedAt ? 'Completed' : 'Pending' }}
-                          </span>
+                  <span :class="['status', assignment.completedAt ? 'completed' : 'pending']">
+                    {{ assignment.completedAt ? 'Completed' : 'Pending' }}
+                  </span>
                         </td>
-                        <td>{{ assignment.score || '-' }}</td>
-                        <td>{{ assignment.completedAt ? formatDate(assignment.completedAt) : '-' }}</td>
+                        <td class="score-cell">{{ assignment.score || '-' }}</td>
+                        <td class="date-cell">{{ assignment.completedAt ? formatDate(assignment.completedAt) : '-' }}</td>
                         <td>
-                          <button class="delete-btn" @click="removeStudent(assignment.studentId)">
+                          <button class="delete-btn" @click="removeStudent(assignment.studentId)" aria-label="Remove student">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                               <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                             </svg>
                           </button>
                         </td>
                       </tr>
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div class="exams-grid">
-            <div 
-              v-for="(exam, index) in exams" 
-              :key="exam.id" 
-              class="exam-card"
-              @click="showExamDetails(exam.id)">
-              <a href="#" class="exam-link">Exam №{{ index + 1 }}. {{ exam.title }}</a>
-              <p class="exam-stats">Number of students: {{ exam.assignedStudentCount || 0 }}</p>
-            </div>
+          <div class="exams-grid" v-if="exams.length > 0">
+            <ExamCard
+                v-for="(exam, index) in exams"
+                :key="exam.id"
+                :exam="{
+                  ...exam,
+                  questionCount: exam.questionCount || 0,
+                  teacherFirstName: 'You',
+                  teacherLastName: '',
+                  teacherEmail: ''
+                }"
+            >
+              <template #actions>
+                <button @click.stop="editExam(exam)" class="exam-btn edit-btn">Edit</button>
+                <button @click.stop="showExamDetails(exam.id)" class="exam-btn view-btn">View</button>
+              </template>
+            </ExamCard>
+          </div>
+
+          <div v-else class="empty-state">
+            <div class="empty-state-icon">📝</div>
+            <h3 class="empty-state-title">No Exams Yet</h3>
+            <p class="empty-state-message">Create your first exam to get started</p>
+            <button @click="showExamModal = true" class="submit-btn primary">Create Exam</button>
           </div>
         </div>
       </div>
@@ -184,7 +200,23 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
+import api from '../../api';
+import NavBar from '../../components/NavBar.vue';
+import ExamCard from '../../components/ExamCard.vue';
+
+function debounce(func, delay) {
+  let timeoutId;
+  return function(...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func.apply(this, args), delay);
+  };
+}
+
+const links = [
+  { to: '/teacher/profile', label: 'Profile' },
+  { to: '/teacher/exams', label: 'Exams' },
+  { to: '/teacher/students', label: 'My Students' }
+];
 
 const router = useRouter();
 
@@ -195,6 +227,9 @@ const studentAssignments = ref([]);
 const studentEmail = ref('');
 const addStudentMessage = ref('');
 const addStudentMessageType = ref('');
+const isEditingExam = ref(false);
+const searchResults = ref([]);
+const showSearchResults = ref(false);
 
 const newExam = ref({
   title: '',
@@ -203,10 +238,42 @@ const newExam = ref({
   passingScore: 60
 });
 
+const createError = ref('');
+
+const debouncedSearchStudents = debounce(async (email) => {
+  if (!email || email.length < 3) {
+    searchResults.value = [];
+    return;
+  }
+
+  try {
+    const response = await api.usersSearch.byEmail(email);
+    const data = response.data || [];
+    if (Array.isArray(data)) {
+      searchResults.value = data.filter(u => u.role === 'STUDENT');
+    } else {
+      searchResults.value = [];
+    }
+  } catch (error) {
+    console.error('Error searching students:', error);
+    searchResults.value = [];
+  }
+}, 400);
+
 async function fetchExams() {
   try {
-    const res = await axios.get('/api/teacher/exams');
+    const res = await api.teacherExams.list();
     exams.value = res.data || [];
+
+    // Fetch assignment counts for each exam
+    for (let exam of exams.value) {
+      try {
+        const assignments = await api.teacherExams.assignments(exam.id);
+        exam.assignedStudentCount = assignments.data?.length || 0;
+      } catch (e) {
+        exam.assignedStudentCount = 0;
+      }
+    }
   } catch (error) {
     console.error('Failed to fetch exams:', error);
     if (error.response?.status === 401) {
@@ -216,74 +283,769 @@ async function fetchExams() {
 }
 
 async function createExam() {
+  createError.value = '';
+
+  if (!newExam.value.title?.trim()) {
+    createError.value = 'Please provide a title';
+    return;
+  }
+  if (newExam.value.durationMinutes <= 0) {
+    createError.value = 'Duration must be greater than 0';
+    return;
+  }
+  if (newExam.value.passingScore < 0 || newExam.value.passingScore > 100) {
+    createError.value = 'Passing score must be between 0 and 100';
+    return;
+  }
+
   try {
-    await axios.post('/api/teacher/exams', {
-      title: newExam.value.title,
-      description: newExam.value.description,
+    const payload = {
+      title: newExam.value.title.trim(),
+      description: newExam.value.description?.trim() || '',
       durationMinutes: newExam.value.durationMinutes,
       passingScore: newExam.value.passingScore
-    });
-    
-    showExamModal.value = false;
-    newExam.value = { title: '', description: '', durationMinutes: 60, passingScore: 60 };
+    };
+
+    if (isEditingExam.value && selectedExam.value?.id) {
+      await api.teacherExams.update(selectedExam.value.id, payload);
+    } else {
+      await api.teacherExams.create(payload);
+    }
+
     await fetchExams();
+    closeCreateModal();
   } catch (error) {
-    console.error('Failed to create exam:', error);
+    console.error('Failed to create/update exam:', error);
+    createError.value = error.response?.data?.message || 'Failed to create/update exam';
   }
 }
 
 async function showExamDetails(examId) {
   try {
-    const res = await axios.get(`/api/teacher/exams/${examId}`);
+    const res = await api.teacherExams.details(examId);
     selectedExam.value = res.data;
-    
-    // Fetch assignments - note: this endpoint returns assignments not students directly
-    const assignmentsRes = await axios.get(`/api/teacher/exams/${examId}/assignments`);
+
+    const assignmentsRes = await api.teacherExams.assignments(examId);
+    console.log('Student assignments:', assignmentsRes.data); // Добавьте эту строку для отладки
     studentAssignments.value = assignmentsRes.data || [];
   } catch (error) {
     console.error('Failed to fetch exam details:', error);
   }
 }
 
+function onEmailInput(e) {
+  const email = e.target.value.trim();
+  debouncedSearchStudents(email);
+}
+
+function hideSearchResults() {
+  setTimeout(() => {
+    showSearchResults.value = false;
+  }, 200);
+}
+
+function selectStudentFromSearch(student) {
+  studentEmail.value = student.email;
+  searchResults.value = [];
+  showSearchResults.value = false;
+}
+
 async function addStudentToExam() {
   if (!studentEmail.value || !selectedExam.value) return;
-  
+
   addStudentMessage.value = '';
   addStudentMessageType.value = 'error';
-  addStudentMessage.value = 'Finding student by email feature not yet implemented. Please use student ID manually for now.';
-  setTimeout(() => { addStudentMessage.value = ''; }, 5000);
-  
-  // TODO: Implement finding student by email
-  // This requires either:
-  // 1. Adding an endpoint in exam-service to find students by email
-  // 2. Or calling user-service directly from the frontend
+
+  try {
+    const userRes = await api.usersSearch.byEmail(studentEmail.value);
+    let found = null;
+
+    if (Array.isArray(userRes.data)) {
+      found = userRes.data.find(u => u.email?.toLowerCase() === studentEmail.value.toLowerCase());
+    } else {
+      found = userRes.data;
+    }
+
+    if (!found || !found.id) {
+      addStudentMessage.value = 'Student not found';
+      return;
+    }
+
+    await api.teacherExams.assign(selectedExam.value.id, [found.id]);
+
+    addStudentMessageType.value = 'success';
+    addStudentMessage.value = 'Student added successfully';
+    studentEmail.value = '';
+    searchResults.value = [];
+
+    await showExamDetails(selectedExam.value.id);
+  } catch (error) {
+    console.error('Failed to add student:', error);
+    addStudentMessage.value = error.response?.data?.message || 'Failed to add student';
+  }
 }
 
 async function removeStudent(studentId) {
   if (!confirm('Are you sure you want to remove this student?')) return;
-  
+
   try {
-    await axios.delete(`/api/teacher/exams/${selectedExam.value.id}/assignments/${studentId}`);
+    await api.teacherExams.removeAssignment(selectedExam.value.id, studentId);
     await showExamDetails(selectedExam.value.id);
   } catch (error) {
     console.error('Failed to remove student:', error);
+    alert('Failed to remove student');
   }
 }
 
 function formatDate(dateString) {
   if (!dateString) return '-';
-  const date = new Date(dateString);
-  return date.toLocaleString();
+  return new Date(dateString).toLocaleDateString();
 }
 
 function getInitials(name) {
-  if (!name) return '';
-  return name.split(' ').map(n => n.charAt(0)).join('');
+  if (!name) return '??';
+  return name.split(' ').map(n => n.charAt(0)).join('').toUpperCase().substring(0, 2);
+}
+
+function editExam(exam) {
+  isEditingExam.value = true;
+  newExam.value = {
+    title: exam.title,
+    description: exam.description,
+    durationMinutes: exam.durationMinutes,
+    passingScore: exam.passingScore
+  };
+  selectedExam.value = exam;
+  showExamModal.value = true;
+}
+
+function closeCreateModal() {
+  showExamModal.value = false;
+  isEditingExam.value = false;
+  selectedExam.value = null;
+  newExam.value = { title: '', description: '', durationMinutes: 60, passingScore: 60 };
+  createError.value = '';
 }
 
 onMounted(fetchExams);
 </script>
 
-<style>
-@import '../../assets/css/teacher/exams.css';
+<style scoped>
+.teacher-exams {
+  min-height: 100vh;
+  background-color: var(--light-blue);
+}
+
+.dashboard-layout-exams {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.card-title {
+  margin: 0;
+  color: var(--text-dark);
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.add-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.add-button:hover {
+  background-color: var(--light-gray);
+}
+
+/* Exams Grid */
+.exams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+  margin-top: 24px;
+}
+
+.name-cell {
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.email-cell {
+  color: var(--text-gray);
+  font-size: 13px;
+}
+/* Exam Details Styles */
+.exam-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.exam-icon.large {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F3F6FF;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.exam-description {
+  color: #666;
+  margin: 0;
+  line-height: 1.5;
+  font-size: 14px;
+}
+
+.exam-info-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.exam-info-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: var(--text-dark);
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.info-label {
+  color: #666;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.info-value {
+  color: #333;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.exam-students-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  color: var(--text-dark);
+}
+
+.add-student-section {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.add-student-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #374151;
+}
+
+/* Table styles for student details */
+.name-cell {
+  font-weight: 500;
+  color: var(--text-dark);
+  font-size: 14px;
+}
+
+.email-cell {
+  color: var(--text-gray);
+  font-size: 13px;
+}
+
+.score-cell {
+  font-weight: 600;
+  text-align: center;
+}
+
+.date-cell {
+  font-size: 13px;
+  color: var(--text-gray);
+}
+
+/* Responsive table */
+@media (max-width: 768px) {
+  .exam-info-section {
+    padding: 12px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .info-item {
+    padding: 10px;
+  }
+
+  .name-cell,
+  .email-cell {
+    font-size: 13px;
+  }
+}
+
+.exam-btn {
+  flex: 1;
+  padding: 8px 16px;
+  border: 1px solid;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.edit-btn {
+  background: white;
+  border-color: var(--primary-blue);
+  color: var(--primary-blue);
+}
+
+.edit-btn:hover {
+  background: var(--primary-blue);
+  color: white;
+}
+
+.view-btn {
+  background: white;
+  border-color: var(--text-gray);
+  color: var(--text-gray);
+}
+
+.view-btn:hover {
+  background: var(--text-gray);
+  color: white;
+}
+
+/* Modal Styles */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.wide-modal {
+  max-width: 800px;
+}
+
+.close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-gray);
+  background: none;
+  border: none;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close:hover {
+  color: var(--text-dark);
+}
+
+/* Form Styles */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.submit-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  flex: 1;
+}
+
+.submit-btn.primary {
+  background: var(--primary-blue);
+  color: white;
+}
+
+.submit-btn.primary:hover {
+  background: var(--secondary-blue);
+}
+
+.submit-btn.secondary {
+  background: var(--light-gray);
+  color: var(--text-dark);
+}
+
+.submit-btn.secondary:hover {
+  background: #e0e0e0;
+}
+
+/* Student Search */
+.email-input-wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.search-result-item {
+  padding: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--light-gray);
+  transition: background-color 0.2s;
+}
+
+.search-result-item:hover {
+  background-color: var(--light-blue);
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.search-result-item small {
+  font-size: 12px;
+  color: var(--text-gray);
+}
+
+.add-student-form {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+.add-student-btn {
+  padding: 10px 20px;
+  background: var(--primary-blue);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.add-student-btn:disabled {
+  background: var(--text-gray);
+  cursor: not-allowed;
+}
+
+.add-student-btn:not(:disabled):hover {
+  background: var(--secondary-blue);
+}
+
+/* Students Table */
+.students-table-container {
+  overflow-x: auto;
+  margin-top: 20px;
+}
+
+.results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.results-table th {
+  background: var(--light-gray);
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-dark);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.results-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.results-table tr:hover {
+  background-color: var(--light-blue);
+}
+
+.no-data {
+  text-align: center;
+  color: var(--text-gray);
+  font-style: italic;
+  padding: 40px !important;
+}
+
+.status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status.completed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.delete-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  color: #dc2626;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.delete-btn:hover {
+  background: #fee2e2;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-gray);
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-state-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-dark);
+}
+
+.empty-state-message {
+  margin-bottom: 24px;
+}
+
+/* Message Styles */
+.message {
+  padding: 12px;
+  border-radius: 6px;
+  margin: 12px 0;
+  font-size: 14px;
+}
+
+.message.success {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.message.error {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .dashboard-layout-exams {
+    padding: 16px;
+  }
+
+  .header-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .card-title {
+    font-size: 20px;
+  }
+
+  .exams-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .modal {
+    padding: 10px;
+  }
+
+  .modal-content {
+    padding: 20px;
+  }
+
+  .wide-modal {
+    max-width: 100%;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .add-student-form {
+    flex-direction: column;
+  }
+
+  .students-table-container {
+    font-size: 12px;
+  }
+
+  .results-table th,
+  .results-table td {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-layout-exams{
+    padding: 12px;
+  }
+
+  .modal-content {
+    padding: 16px;
+  }
+
+  .results-table {
+    font-size: 12px;
+  }
+
+  .results-table th,
+  .results-table td {
+    padding: 6px 4px;
+  }
+
+  .status {
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .nav-bar,
+  .add-button,
+  .delete-btn {
+    display: none !important;
+  }
+
+  .dashboard-layout-exams {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}
 </style>
