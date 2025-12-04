@@ -1,17 +1,8 @@
 <template>
   <div class="exam-card">
     <div class="exam-card-header">
-      <div class="exam-icon">
-        <slot name="icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-          </svg>
-        </slot>
-      </div>
-      <div style="flex:1;">
-        <h3 class="exam-card-title">{{ exam.title }}</h3>
-      </div>
+      <h3 class="exam-card-title">{{ exam.title }}</h3>
+      <span v-if="exam.statusLabel" class="exam-status-pill" :class="exam.statusClass">{{ exam.statusLabel }}</span>
     </div>
 
     <p v-if="exam.description" class="exam-card-description">{{ exam.description }}</p>
@@ -57,18 +48,8 @@ const props = defineProps({
 }
 .exam-card-header {
   display: flex;
-  gap: 12px;
   align-items: center;
-}
-.exam-icon {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #F3F6FF;
-  border-radius: 10px;
-  flex-shrink: 0;
+  justify-content: space-between;
 }
 .exam-card-title {
   font-size: 16px;
@@ -113,8 +94,27 @@ const props = defineProps({
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  margin-top: 8px;
 }
-
+.exam-status-pill {
+  margin-left: 16px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 500;
+  background: #f0f4fa;
+  color: #2563eb;
+  min-width: 90px;
+  text-align: center;
+}
+.exam-status-pill.completed {
+  background: #e6f7e6;
+  color: #22c55e;
+}
+.exam-status-pill.pending {
+  background: #fff4e6;
+  color: #f59e42;
+}
 @media (max-width: 900px) {
   .exam-card { padding: 14px; }
 }

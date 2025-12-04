@@ -517,6 +517,35 @@ onUnmounted(() => {
   color: var(--text-dark);
 }
 
+.exam-btn-primary,
+.exam-btn-secondary {
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.exam-btn-primary {
+  background: var(--primary-blue);
+  color: #ffffff;
+  border: none;
+}
+
+.exam-btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.exam-btn-secondary {
+  background: #ffffff;
+  color: var(--text-dark);
+  border: 1px solid var(--border-color);
+}
+
+.exam-btn-secondary:hover {
+  background: #f3f4ff;
+}
+
 @media (max-width: 768px) {
   .exam-overview {
     flex-direction: column;

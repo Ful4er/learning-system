@@ -64,16 +64,12 @@
                     </span>
                   </div>
                   <div class="recent-exam-meta">
-                    <div>
-                      <span class="label">Passing</span>
-                      <span class="value">{{ exam.passingScore }}%</span>
-                    </div>
                     <div v-if="getExamState(exam.id).lastScore != null">
-                      <span class="label">Last score</span>
+                      <span class="label">Score </span>
                       <span class="value">{{ formatScore(getExamState(exam.id).lastScore) }}</span>
                     </div>
                     <div>
-                      <span class="label">Updated</span>
+                      <span class="label">Updated </span>
                       <span class="value">{{ formatDate(exam.updatedAt || exam.createdAt) }}</span>
                     </div>
                   </div>
@@ -98,14 +94,11 @@
               </div>
             </article>
 
-            <article class="section-card">
+            <article v-if="activeAttempts.length > 0" class="section-card">
               <div class="section-header">
                 <h2>Active attempts</h2>
               </div>
-              <div v-if="activeAttempts.length === 0" class="empty-state">
-                <p>You don't have active attempts right now.</p>
-              </div>
-              <ul v-else class="attempt-list">
+              <ul class="attempt-list">
                 <li v-for="attempt in activeAttempts" :key="attempt.id" class="attempt-item">
                   <div>
                     <p class="exam-title">{{ attempt.examTitle }}</p>
@@ -260,6 +253,11 @@ async function startExam(exam) {
   const state = getExamState(exam.id);
   if (state.activeAttemptId) {
     resumeAttempt(exam.id, state.activeAttemptId);
+    return;
+  }
+  // Only one attempt per exam is allowed
+  if (state.status === 'completed') {
+    alert('You have already completed this exam. Only one attempt is allowed.');
     return;
   }
 
@@ -487,18 +485,18 @@ onMounted(initialize);
 
 .recent-exam-meta {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .recent-exam-meta .label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-gray);
 }
 
 .recent-exam-meta .value {
   font-weight: 600;
   color: var(--text-dark);
+  font-size: 13px;
 }
 
 .card-actions {
@@ -510,6 +508,35 @@ onMounted(initialize);
   flex: 1;
   text-align: center;
   text-decoration: none;
+}
+
+.exam-btn-primary,
+.exam-btn-secondary {
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.exam-btn-primary {
+  background: var(--primary-blue);
+  color: #ffffff;
+  border: none;
+}
+
+.exam-btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.exam-btn-secondary {
+  background: #ffffff;
+  color: var(--text-dark);
+  border: 1px solid var(--border-color);
+}
+
+.exam-btn-secondary:hover {
+  background: #f3f4ff;
 }
 
 .attempt-list {

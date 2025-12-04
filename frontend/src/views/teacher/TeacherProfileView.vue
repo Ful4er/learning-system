@@ -150,6 +150,9 @@ body {
 }
 
 .dashboard-layout-profile {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 31px;
 }
 
@@ -303,11 +306,16 @@ body {
 @media (max-width: 768px) {
   .dashboard-layout-profile {
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
   }
 
   .profile-card {
     max-width: 100%;
+    width: 100%;
+  }
+
+  .action-cards {
+    width: 100%;
   }
 }
 

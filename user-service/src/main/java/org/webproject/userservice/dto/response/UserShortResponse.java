@@ -4,6 +4,8 @@ import lombok.Data;
 import org.webproject.userservice.model.User;
 import org.webproject.userservice.util.Role;
 
+import java.time.LocalDateTime;
+
 @Data
 public class UserShortResponse {
     private Long id;
@@ -11,6 +13,7 @@ public class UserShortResponse {
     private String lastName;
     private String email;
     private Role role;
+    private LocalDateTime createdAt;
 
     public UserShortResponse(User user) {
         this.id = user.getId();
@@ -18,5 +21,6 @@ public class UserShortResponse {
         this.lastName = user.getLastName();
         this.email = user.getEmail();
         this.role = user.getRole();
+        this.createdAt = user.getCreatedAt();
     }
 }

@@ -97,7 +97,7 @@
                 <span class="value">{{ exam.questionCount || 0 }}</span>
               </div>
               <div>
-                <span class="label">Passing score</span>
+                <span class="label">Score</span>
                 <span class="value">{{ exam.passingScore }}%</span>
               </div>
               <div>
@@ -119,11 +119,11 @@
           <p class="muted" style="margin-bottom: 16px;">{{ selectedExam.description || 'No description provided' }}</p>
           <div class="info-grid">
             <div>
-              <span class="label">Duration</span>
+                  <span class="label">Duration</span>
               <span class="value">{{ selectedExam.durationMinutes }} min</span>
             </div>
             <div>
-              <span class="label">Passing score</span>
+                  <span class="label">Score</span>
               <span class="value">{{ selectedExam.passingScore }}%</span>
             </div>
             <div>
@@ -142,8 +142,12 @@
           <section class="history-section">
             <div class="history-header">
               <h3>Attempt history</h3>
-              <button class="link-btn" @click="startExam(selectedExam)">
-                {{ getExamState(selectedExam.id).activeAttemptId ? 'Continue attempt' : 'Start again' }}
+              <button
+                v-if="getExamState(selectedExam.id).activeAttemptId"
+                class="link-btn"
+                @click="startExam(selectedExam)"
+              >
+                Continue attempt
               </button>
             </div>
 
@@ -262,9 +266,7 @@ function setExamState(examId, updates) {
 function transformExam(exam) {
   return {
     ...exam,
-    teacherFirstName: 'Assigned',
-    teacherLastName: '',
-    teacherEmail: '',
+    // teacher info is shown in the details modal where we load full teacher profile
     questionCount: exam.questionCount || 0
   };
 }
@@ -327,8 +329,14 @@ async function hydrateExamState(examId) {
 
 async function startExam(exam) {
   const state = getExamState(exam.id);
+  // Continue active attempt if it exists
   if (state.activeAttemptId) {
     router.push(`/student/exams/${exam.id}/attempt/${state.activeAttemptId}`);
+    return;
+  }
+  // Only one attempt per exam is allowed
+  if (state.status === 'completed') {
+    alert('You have already completed this exam. Only one attempt is allowed.');
     return;
   }
 
@@ -723,6 +731,35 @@ onMounted(fetchExams);
 
 .exam-btn {
   min-width: 110px;
+}
+
+.exam-btn-primary,
+.exam-btn-secondary {
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.exam-btn-primary {
+  background: var(--primary-blue);
+  color: #fff;
+  border: none;
+}
+
+.exam-btn-primary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.exam-btn-secondary {
+  background: #ffffff;
+  color: var(--text-dark);
+  border: 1px solid var(--border-color);
+}
+
+.exam-btn-secondary:hover {
+  background: #f3f4ff;
 }
 
 @media (max-width: 992px) {

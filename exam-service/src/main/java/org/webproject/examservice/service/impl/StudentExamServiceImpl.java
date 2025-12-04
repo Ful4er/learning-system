@@ -127,11 +127,17 @@ public class StudentExamServiceImpl implements StudentExamService {
         Optional<ExamAttempt> activeAttempt = existingAttempts.stream()
                 .filter(attempt -> attempt.getStatus() == ExamAttempt.AttemptStatus.IN_PROGRESS)
                 .findFirst();
-        
+
         if (activeAttempt.isPresent()) {
             throw new IllegalArgumentException("Student already has an active attempt for this exam");
         }
-        
+
+        boolean hasFinishedAttempt = existingAttempts.stream()
+                .anyMatch(attempt -> attempt.getStatus() == ExamAttempt.AttemptStatus.FINISHED);
+        if (hasFinishedAttempt) {
+            throw new InvalidExamStateException("Student has already completed this exam and cannot start a new attempt");
+        }
+
         ExamAttempt attempt = new ExamAttempt();
         attempt.setExamId(request.getExamId());
         attempt.setStudentId(studentId);

@@ -56,7 +56,7 @@
                   </div>
                   <div class="stat" style="margin-left:12px;">
                     <span class="stat-label">Last</span>
-                    <span class="stat-value">{{ student.lastCompletedAt ? formatDate(student.lastCompletedAt) : '-' }}</span>
+                    <span class="stat-value">{{ student.lastCompletedAt ? formatShortDate(student.lastCompletedAt) : '-' }}</span>
                   </div>
                 </div>
                 <div class="card-actions">
@@ -249,12 +249,18 @@ const filteredStudents = computed(() => {
 
 async function showStudentDetails(studentId) {
   showModal.value = true
-  selectedStudent.value = null
+  // предварительно используем данные из списка, чтобы имя/почта совпадали с карточкой
+  const base = students.value.find(s => s.id === studentId) || null
+  selectedStudent.value = base ? { ...base } : null
   studentEnrolledExams.value = []
 
   try {
     const response = await api.teacherStudents.details(studentId)
-    selectedStudent.value = response.data
+    // аккуратно мёрджим, чтобы не перетереть корректное имя "Student2 Test" возможным "Student Unknown"
+    selectedStudent.value = {
+      ...(selectedStudent.value || {}),
+      ...(response.data || {})
+    }
 
     try {
       const resultsRes = await api.teacherStudents.results(studentId)
@@ -298,6 +304,16 @@ function formatDate(dateString) {
   return new Date(dateString).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
+    day: 'numeric'
+  })
+}
+
+function formatShortDate(dateString) {
+  if (!dateString) return 'N/A'
+  // compact date for cards so layout stays in one line
+  return new Date(dateString).toLocaleDateString(undefined, {
+    year: '2-digit',
+    month: 'short',
     day: 'numeric'
   })
 }
@@ -661,11 +677,13 @@ function logout() {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 .header-controls .controls {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 .search-input {
   padding: 0.5rem 0.75rem;
@@ -701,14 +719,31 @@ function logout() {
   width: 100%;
 }
 .btn.small {
-  padding: 0.35rem 0.6rem;
-  font-size: 0.85rem;
-  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  border-radius: 999px;
   border: none;
   background: var(--primary-color);
   color: #fff;
   cursor: pointer;
   width: 100%;
+  font-weight: 500;
 }
 .btn.small:hover { background: #1d4ed8; }
+
+@media (max-width: 768px) {
+  .header-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header-controls .controls {
+    width: 100%;
+  }
+
+  .search-input,
+  .sort-select {
+    width: 100%;
+  }
+}
 </style>

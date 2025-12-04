@@ -158,15 +158,6 @@
               <span class="close" @click="closeExamDetails">&times;</span>
               <div class="exam-details">
                 <div class="exam-header">
-                  <div class="exam-icon large">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                      <polyline points="14 2 14 8 20 8"></polyline>
-                      <line x1="16" y1="13" x2="8" y2="13"></line>
-                      <line x1="16" y1="17" x2="8" y2="17"></line>
-                      <polyline points="10 9 9 9 8 9"></polyline>
-                    </svg>
-                  </div>
                   <h2>{{ selectedExamDetails.title }}</h2>
                   <p class="exam-description">{{ selectedExamDetails.description || 'No description provided' }}</p>
                 </div>
@@ -283,10 +274,8 @@
               <ExamCard
                   :exam="{
                     ...exam,
-                    questionCount: exam.questionCount || 0,
-                    teacherFirstName: 'You',
-                    teacherLastName: '',
-                    teacherEmail: ''
+                    // teacher identity is obvious here, no need to show name block
+                    questionCount: exam.questionCount || 0
                   }"
               >
                 <template #actions>
@@ -788,9 +777,9 @@ function closeExamDetails() {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 16px;
+  margin-bottom: 2rem;
+  flex-wrap: nowrap;
+  gap: 12px;
 }
 
 .card-title {
@@ -798,6 +787,8 @@ function closeExamDetails() {
   color: var(--text-dark);
   font-size: 24px;
   font-weight: 600;
+  flex: 1;
+  min-width: 0;
 }
 
 .add-button {
@@ -843,17 +834,6 @@ function closeExamDetails() {
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border-color);
-}
-
-.exam-icon.large {
-  width: 60px;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #F3F6FF;
-  border-radius: 12px;
-  margin-bottom: 8px;
 }
 
 .exam-description {
@@ -1363,6 +1343,21 @@ function closeExamDetails() {
   flex: 1;
 }
 
+.email-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  font-size: 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.email-input:focus {
+  outline: none;
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
 .search-dropdown {
   position: absolute;
   top: 100%;
@@ -1556,8 +1551,9 @@ function closeExamDetails() {
   }
 
   .header-section {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
   .card-title {
@@ -1567,6 +1563,10 @@ function closeExamDetails() {
   .exams-grid {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+
+  .card-title {
+    font-size: 20px;
   }
 
   .modal {
