@@ -59,6 +59,8 @@ async function onLogout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding-top: 20px;
+  padding-bottom: 5px;
 }
 .nav-links {
   display: flex;

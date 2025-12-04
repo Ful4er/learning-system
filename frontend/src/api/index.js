@@ -44,6 +44,8 @@ export default {
     create: (payload) => axios.post('/api/teacher/exams', payload),
     update: (examId, payload) => axios.put(`/api/teacher/exams/${examId}`, payload),
     delete: (examId) => axios.delete(`/api/teacher/exams/${examId}`),
+    publish: (examId) => axios.post(`/api/teacher/exams/${examId}/publish`),
+    archive: (examId) => axios.post(`/api/teacher/exams/${examId}/archive`),
     details: (examId) => axios.get(`/api/teacher/exams/${examId}`),
     assignments: (examId) => axios.get(`/api/teacher/exams/${examId}/assignments`),
     assign: (examId, studentIds) => axios.post(`/api/teacher/exams/${examId}/assign`, { studentIds }),

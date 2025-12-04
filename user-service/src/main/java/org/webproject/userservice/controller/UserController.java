@@ -10,6 +10,9 @@ import org.webproject.userservice.model.User;
 import org.webproject.userservice.service.AuthService;
 import org.webproject.userservice.service.UserService;
 
+import java.util.Collections;
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
@@ -37,20 +40,23 @@ public class UserController {
 
     @PreAuthorize("hasRole('TEACHER') or hasRole('ADMIN')")
     @GetMapping("/search")
-    public ResponseEntity<UserShortResponse> searchStudents(
+    public ResponseEntity<List<UserShortResponse>> searchStudents(
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String name) {
-        java.util.List<org.webproject.userservice.model.User> users;
-        if (email != null && !email.isEmpty()) {
+
+        List<User> users;
+        if (email != null && !email.isBlank()) {
             users = userService.searchStudentsByEmail(email);
-        } else if (name != null && !name.isEmpty()) {
+        } else if (name != null && !name.isBlank()) {
             users = userService.searchStudentsByName(name);
         } else {
-            users = java.util.Collections.emptyList();
+            users = Collections.emptyList();
         }
-        java.util.List<org.webproject.userservice.dto.response.UserShortResponse> result = users.stream()
-                .map(org.webproject.userservice.dto.response.UserShortResponse::new)
+
+        List<UserShortResponse> result = users.stream()
+                .map(UserShortResponse::new)
                 .toList();
-        return ResponseEntity.ok((UserShortResponse) result);
+
+        return ResponseEntity.ok(result);
     }
 }

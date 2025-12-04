@@ -8,6 +8,7 @@ import org.webproject.examservice.dto.request.SubmitAnswerRequest;
 import org.webproject.examservice.dto.response.ExamAttemptResponse;
 import org.webproject.examservice.dto.response.ExamResponse;
 import org.webproject.examservice.dto.response.QuestionResponse;
+import org.webproject.examservice.dto.response.StudentAnswerResponse;
 import org.webproject.examservice.exception.ExamNotFoundException;
 import org.webproject.examservice.exception.InvalidExamStateException;
 import org.webproject.examservice.model.Exam;
@@ -25,7 +26,10 @@ import org.webproject.examservice.repository.StudentAnswerRepository;
 import org.webproject.examservice.service.StudentExamService;
 
 import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -177,6 +181,19 @@ public class StudentExamServiceImpl implements StudentExamService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public ExamAttemptResponse getAttemptDetails(Long studentId, Long attemptId) {
+        ExamAttempt attempt = examAttemptRepository.findById(attemptId)
+                .orElseThrow(() -> new IllegalArgumentException("Attempt not found"));
+
+        if (!attempt.getStudentId().equals(studentId)) {
+            throw new IllegalArgumentException("Attempt does not belong to this student");
+        }
+
+        return toExamAttemptResponse(attempt, true);
+    }
+
+    @Override
     @Transactional
     public void submitAnswer(Long studentId, Long attemptId, SubmitAnswerRequest request) {
         ExamAttempt attempt = examAttemptRepository.findById(attemptId)
@@ -281,6 +298,10 @@ public class StudentExamServiceImpl implements StudentExamService {
     }
 
     private ExamAttemptResponse toExamAttemptResponse(ExamAttempt attempt) {
+        return toExamAttemptResponse(attempt, false);
+    }
+
+    private ExamAttemptResponse toExamAttemptResponse(ExamAttempt attempt, boolean includeAnswers) {
         ExamAttemptResponse response = new ExamAttemptResponse();
         response.setId(attempt.getId());
         response.setExamId(attempt.getExamId());
@@ -304,7 +325,52 @@ public class StudentExamServiceImpl implements StudentExamService {
             passed = scoreVal >= passing;
         }
         response.setPassed(passed);
+
+        if (includeAnswers) {
+            response.setAnswers(mapStudentAnswers(attempt.getId()));
+        }
+
         return response;
+    }
+
+    private List<StudentAnswerResponse> mapStudentAnswers(Long attemptId) {
+        List<StudentAnswer> answers = studentAnswerRepository.findAllByAttemptId(attemptId);
+        if (answers == null || answers.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return answers.stream()
+                .map(this::toStudentAnswerResponse)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+    }
+
+    private StudentAnswerResponse toStudentAnswerResponse(StudentAnswer answer) {
+        if (answer == null) {
+            return null;
+        }
+        StudentAnswerResponse resp = new StudentAnswerResponse();
+        resp.setQuestionId(answer.getQuestionId());
+
+        if (answer.getSelectedOptionIds() != null && !answer.getSelectedOptionIds().isBlank()) {
+            List<Long> ids = Arrays.stream(answer.getSelectedOptionIds().split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(id -> {
+                        try {
+                            return Long.parseLong(id);
+                        } catch (NumberFormatException ex) {
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            resp.setSelectedOptionIds(ids);
+        } else {
+            resp.setSelectedOptionIds(Collections.emptyList());
+        }
+
+        resp.setTextAnswer(answer.getTextAnswer());
+        return resp;
     }
 }
 

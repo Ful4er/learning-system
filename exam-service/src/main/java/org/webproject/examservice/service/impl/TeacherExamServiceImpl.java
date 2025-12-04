@@ -13,14 +13,20 @@ import org.webproject.examservice.dto.response.ExamAssignmentResponse;
 import org.webproject.examservice.dto.response.ExamAttemptResponse;
 import org.webproject.examservice.dto.response.ExamResponse;
 import org.webproject.examservice.dto.response.QuestionResponse;
+import org.webproject.examservice.dto.response.StudentAnswerResponse;
 import org.webproject.examservice.dto.response.StudentExamResultResponse;
 import org.webproject.examservice.dto.response.UserDto;
 import org.webproject.examservice.exception.*;
 import org.webproject.examservice.model.*;
+import org.webproject.examservice.model.StudentAnswer;
 import org.webproject.examservice.repository.*;
 import org.webproject.examservice.service.TeacherExamService;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -35,6 +41,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     private final QuestionRepository questionRepository;
     private final QuestionOptionRepository questionOptionRepository;
     private final ExamAttemptRepository examAttemptRepository;
+    private final StudentAnswerRepository studentAnswerRepository;
     private final UserServiceClient userServiceClient;
 
     @Override
@@ -333,7 +340,26 @@ public class TeacherExamServiceImpl implements TeacherExamService {
             r.setStudentEmail(user.getEmail());
         }
 
+        List<ExamAttempt> attempts = examAttemptRepository.findAllByExamIdAndStudentId(
+                assignment.getExamId(),
+                assignment.getStudentId()
+        );
+        if (!attempts.isEmpty()) {
+            ExamAttempt latestAttempt = attempts.stream()
+                    .max(Comparator.comparing(this::resolveAttemptTimestamp))
+                    .orElse(attempts.get(attempts.size() - 1));
+
+            r.setCompletedAt(latestAttempt.getFinishedAt());
+            if (latestAttempt.getCalculatedScore() != null) {
+                r.setScore((int) Math.round(latestAttempt.getCalculatedScore()));
+            }
+        }
+
         return r;
+    }
+
+    private Instant resolveAttemptTimestamp(ExamAttempt attempt) {
+        return attempt.getFinishedAt() != null ? attempt.getFinishedAt() : attempt.getStartedAt();
     }
 
     private QuestionResponse toQuestionResponse(Question q, boolean showCorrectAnswers) {
@@ -427,7 +453,40 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         r.setExamTitle(exam.getTitle());
         r.setTotalQuestions(questionRepository.findAllByExamIdOrderByIdAsc(examId).size());
         r.setPassed(r.getScore() >= exam.getPassingScore());
+        r.setAnswers(mapStudentAnswers(attemptId));
         return r;
+    }
+
+    private List<StudentAnswerResponse> mapStudentAnswers(Long attemptId) {
+        return studentAnswerRepository.findAllByAttemptId(attemptId).stream()
+                .map(this::toStudentAnswerResponse)
+                .collect(Collectors.toList());
+    }
+
+    private StudentAnswerResponse toStudentAnswerResponse(StudentAnswer answer) {
+        StudentAnswerResponse resp = new StudentAnswerResponse();
+        resp.setQuestionId(answer.getQuestionId());
+
+        if (answer.getSelectedOptionIds() != null && !answer.getSelectedOptionIds().isBlank()) {
+            List<Long> ids = Arrays.stream(answer.getSelectedOptionIds().split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(id -> {
+                        try {
+                            return Long.parseLong(id);
+                        } catch (NumberFormatException ex) {
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            resp.setSelectedOptionIds(ids);
+        } else {
+            resp.setSelectedOptionIds(Collections.emptyList());
+        }
+
+        resp.setTextAnswer(answer.getTextAnswer());
+        return resp;
     }
 }
 

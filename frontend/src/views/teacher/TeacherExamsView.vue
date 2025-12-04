@@ -18,41 +18,144 @@
 
           <!-- Create/Edit Exam Modal -->
           <div v-if="showExamModal" class="modal" @click.self="closeCreateModal">
-            <div class="modal-content">
+            <div class="modal-content wide-modal">
               <span class="close" @click="closeCreateModal">&times;</span>
-              <h2>{{ isEditingExam ? 'Edit Exam' : 'Add New Exam' }}</h2>
+              <h2 class="modal-title">{{ isEditingExam ? 'Edit Exam' : 'Add New Exam' }}</h2>
 
-              <div v-if="createError" class="message error">{{ createError }}</div>
+              <div class="modal-body-grid">
+                <section class="exam-form-section" aria-label="Exam basic settings">
+                  <div v-if="createError" class="message error">{{ createError }}</div>
+                  <form @submit.prevent="createExam">
+                    <div class="form-group">
+                      <label for="title">Title</label>
+                      <input type="text" id="title" v-model="newExam.title" required>
+                    </div>
+                    <div class="form-group">
+                      <label for="description">Description</label>
+                      <textarea id="description" v-model="newExam.description" rows="3" placeholder="Short exam summary"></textarea>
+                    </div>
+                    <div class="form-group two-columns">
+                      <div>
+                        <label for="duration">Duration (minutes)</label>
+                        <input type="number" id="duration" v-model.number="newExam.durationMinutes" required min="1">
+                      </div>
+                      <div>
+                        <label for="passingScore">Passing Score (%)</label>
+                        <input type="number" id="passingScore" v-model.number="newExam.passingScore" required min="0" max="100">
+                      </div>
+                    </div>
+                    <div class="form-actions">
+                      <button type="submit" class="submit-btn primary">{{ isEditingExam ? 'Update Exam' : 'Create Exam' }}</button>
+                      <button type="button" class="submit-btn secondary" @click="closeCreateModal">Cancel</button>
+                    </div>
+                    <button
+                        v-if="isEditingExam"
+                        type="button"
+                        class="danger-btn"
+                        @click="confirmDeleteExam"
+                    >
+                      Delete exam
+                    </button>
+                  </form>
+                </section>
 
-              <form @submit.prevent="createExam">
-                <div class="form-group">
-                  <label for="title">Title:</label>
-                  <input type="text" id="title" v-model="newExam.title" required>
-                </div>
-                <div class="form-group">
-                  <label for="description">Description:</label>
-                  <textarea id="description" v-model="newExam.description"></textarea>
-                </div>
-                <div class="form-group">
-                  <label for="duration">Duration (minutes):</label>
-                  <input type="number" id="duration" v-model.number="newExam.durationMinutes" required min="1">
-                </div>
-                <div class="form-group">
-                  <label for="passingScore">Passing Score (%):</label>
-                  <input type="number" id="passingScore" v-model.number="newExam.passingScore" required min="0" max="100">
-                </div>
-                <div class="form-actions">
-                  <button type="submit" class="submit-btn primary">{{ isEditingExam ? 'Update Exam' : 'Create Exam' }}</button>
-                  <button type="button" class="submit-btn secondary" @click="closeCreateModal">Cancel</button>
-                </div>
-              </form>
+                <section v-if="isEditingExam" class="question-manager" aria-label="Exam questions">
+                  <div class="question-manager-header">
+                    <div>
+                      <h3>Questions ({{ examQuestions.length }})</h3>
+                      <p class="muted">Edit, reorder and curate exam content</p>
+                    </div>
+                    <button class="submit-btn tertiary" type="button" @click="startAddQuestion">
+                      + Add question
+                    </button>
+                  </div>
+
+                  <div v-if="questionsLoading" class="muted info-block">Loading questions...</div>
+                  <div v-else>
+                    <div v-if="questionError" class="message error">{{ questionError }}</div>
+                    <div v-if="examQuestions.length === 0" class="muted info-block">
+                      No questions yet — add your first one.
+                    </div>
+                    <ul class="question-list" v-else>
+                      <li v-for="question in examQuestions" :key="question.id" class="question-item">
+                        <div>
+                          <p class="question-text">{{ question.text }}</p>
+                          <div class="question-meta">
+                            <span>{{ formatQuestionType(question.type) }}</span>
+                            <span>Points: {{ question.points }}</span>
+                            <span v-if="question.options?.length">Options: {{ question.options.length }}</span>
+                          </div>
+                        </div>
+                        <div class="question-actions">
+                          <button type="button" class="link-btn" @click="startEditQuestion(question)">Edit</button>
+                          <button type="button" class="link-btn danger" @click="deleteQuestion(question.id)">Delete</button>
+                        </div>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div v-if="showQuestionForm" class="question-form">
+                    <h4>{{ editingQuestionId ? 'Update question' : 'Add question' }}</h4>
+                    <form @submit.prevent="saveQuestion">
+                      <div class="form-group">
+                        <label>Question text</label>
+                        <textarea v-model="questionForm.text" rows="3" required placeholder="E.g. What is the capital of France?"></textarea>
+                      </div>
+                      <div class="form-group two-columns">
+                        <div>
+                          <label>Type</label>
+                          <select v-model="questionForm.type">
+                            <option value="SINGLE_CHOICE">Single choice</option>
+                            <option value="MULTIPLE_CHOICE">Multiple choice</option>
+                            <option value="TEXT">Open text</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label>Points</label>
+                          <input type="number" v-model.number="questionForm.points" min="1" max="100">
+                        </div>
+                      </div>
+
+                      <div v-if="questionForm.type !== 'TEXT'" class="options-builder">
+                        <div class="options-header">
+                          <h5>Options</h5>
+                          <button type="button" class="link-btn" @click="addOption">+ Option</button>
+                        </div>
+                        <div v-if="questionForm.options.length === 0" class="muted info-block">
+                          Add at least one option.
+                        </div>
+                        <div v-for="(option, index) in questionForm.options" :key="index" class="option-row">
+                          <input
+                              type="text"
+                              v-model="option.text"
+                              :placeholder="`Option ${index + 1}`"
+                              required
+                          >
+                          <label class="checkbox">
+                            <input type="checkbox" v-model="option.isCorrect">
+                            Correct
+                          </label>
+                          <button type="button" class="icon-btn" @click="removeOption(index)" aria-label="Remove option">&times;</button>
+                        </div>
+                      </div>
+
+                      <div class="form-actions">
+                        <button type="submit" class="submit-btn primary">
+                          {{ editingQuestionId ? 'Save changes' : 'Save question' }}
+                        </button>
+                        <button type="button" class="submit-btn secondary" @click="cancelQuestionForm">Cancel</button>
+                      </div>
+                    </form>
+                  </div>
+                </section>
+              </div>
             </div>
           </div>
 
           <!-- Exam Details Modal -->
-          <div v-if="selectedExam" class="modal" @click.self="selectedExam = null">
+          <div v-if="selectedExamDetails" class="modal" @click.self="closeExamDetails">
             <div class="modal-content wide-modal">
-              <span class="close" @click="selectedExam = null">&times;</span>
+              <span class="close" @click="closeExamDetails">&times;</span>
               <div class="exam-details">
                 <div class="exam-header">
                   <div class="exam-icon large">
@@ -64,8 +167,8 @@
                       <polyline points="10 9 9 9 8 9"></polyline>
                     </svg>
                   </div>
-                  <h2>{{ selectedExam.title }}</h2>
-                  <p class="exam-description">{{ selectedExam.description || 'No description provided' }}</p>
+                  <h2>{{ selectedExamDetails.title }}</h2>
+                  <p class="exam-description">{{ selectedExamDetails.description || 'No description provided' }}</p>
                 </div>
 
                 <div class="exam-info-section">
@@ -73,11 +176,11 @@
                   <div class="info-grid">
                     <div class="info-item">
                       <span class="info-label">Duration:</span>
-                      <span class="info-value">{{ selectedExam.durationMinutes }} minutes</span>
+                      <span class="info-value">{{ selectedExamDetails.durationMinutes }} minutes</span>
                     </div>
                     <div class="info-item">
                       <span class="info-label">Passing Score:</span>
-                      <span class="info-value">{{ selectedExam.passingScore }}%</span>
+                      <span class="info-value">{{ selectedExamDetails.passingScore }}%</span>
                     </div>
                     <div class="info-item">
                       <span class="info-label">Total Students:</span>
@@ -167,22 +270,46 @@
           </div>
 
           <div class="exams-grid" v-if="exams.length > 0">
-            <ExamCard
-                v-for="(exam, index) in exams"
+            <div
+                v-for="exam in exams"
                 :key="exam.id"
-                :exam="{
-                  ...exam,
-                  questionCount: exam.questionCount || 0,
-                  teacherFirstName: 'You',
-                  teacherLastName: '',
-                  teacherEmail: ''
-                }"
+                class="exam-card-wrapper"
+                @click="showExamDetails(exam.id)"
             >
-              <template #actions>
-                <button @click.stop="editExam(exam)" class="exam-btn edit-btn">Edit</button>
-                <button @click.stop="showExamDetails(exam.id)" class="exam-btn view-btn">View</button>
-              </template>
-            </ExamCard>
+              <div class="exam-card-status">
+                <span class="status-pill" :class="exam.status?.toLowerCase()">{{ examStatusLabel(exam.status) }}</span>
+                <span v-if="exam.status !== 'PUBLISHED'" class="status-hint">Publish to make it visible for students</span>
+              </div>
+              <ExamCard
+                  :exam="{
+                    ...exam,
+                    questionCount: exam.questionCount || 0,
+                    teacherFirstName: 'You',
+                    teacherLastName: '',
+                    teacherEmail: ''
+                  }"
+              >
+                <template #actions>
+                  <button @click.stop="editExam(exam)" class="exam-btn edit-btn">Edit</button>
+                    <button
+                        v-if="exam.status !== 'PUBLISHED'"
+                        @click.stop="publishExam(exam)"
+                        class="exam-btn publish-btn"
+                        :disabled="actionLoadingId === exam.id"
+                    >
+                      {{ actionLoadingId === exam.id ? 'Publishing...' : 'Publish' }}
+                    </button>
+                    <button
+                        v-else
+                        @click.stop="archiveExam(exam)"
+                        class="exam-btn archive-btn"
+                        :disabled="actionLoadingId === exam.id"
+                    >
+                      {{ actionLoadingId === exam.id ? 'Archiving...' : 'Archive' }}
+                    </button>
+                </template>
+              </ExamCard>
+            </div>
           </div>
 
           <div v-else class="empty-state">
@@ -222,14 +349,63 @@ const router = useRouter();
 
 const exams = ref([]);
 const showExamModal = ref(false);
-const selectedExam = ref(null);
+const selectedExamDetails = ref(null);
 const studentAssignments = ref([]);
 const studentEmail = ref('');
 const addStudentMessage = ref('');
 const addStudentMessageType = ref('');
 const isEditingExam = ref(false);
+const editingExamId = ref(null);
 const searchResults = ref([]);
 const showSearchResults = ref(false);
+const examQuestions = ref([]);
+const questionsLoading = ref(false);
+const questionError = ref('');
+const showQuestionForm = ref(false);
+const editingQuestionId = ref(null);
+const questionForm = ref(getDefaultQuestionForm());
+const actionLoadingId = ref(null);
+function examStatusLabel(status) {
+  switch (status) {
+    case 'PUBLISHED':
+      return 'Published';
+    case 'ARCHIVED':
+      return 'Archived';
+    default:
+      return 'Draft';
+  }
+}
+
+async function publishExam(exam) {
+  if (!exam?.id) return;
+  if (!confirm('Publish this exam so that assigned students can see it?')) return;
+  actionLoadingId.value = exam.id;
+  try {
+    await api.teacherExams.publish(exam.id);
+    await fetchExams();
+  } catch (error) {
+    console.error('Failed to publish exam:', error);
+    alert(error.response?.data?.message || 'Unable to publish exam');
+  } finally {
+    actionLoadingId.value = null;
+  }
+}
+
+async function archiveExam(exam) {
+  if (!exam?.id) return;
+  if (!confirm('Archive this exam? Students will no longer see it.')) return;
+  actionLoadingId.value = exam.id;
+  try {
+    await api.teacherExams.archive(exam.id);
+    await fetchExams();
+  } catch (error) {
+    console.error('Failed to archive exam:', error);
+    alert(error.response?.data?.message || 'Unable to archive exam');
+  } finally {
+    actionLoadingId.value = null;
+  }
+}
+
 
 const newExam = ref({
   title: '',
@@ -306,8 +482,8 @@ async function createExam() {
       passingScore: newExam.value.passingScore
     };
 
-    if (isEditingExam.value && selectedExam.value?.id) {
-      await api.teacherExams.update(selectedExam.value.id, payload);
+    if (isEditingExam.value && editingExamId.value) {
+      await api.teacherExams.update(editingExamId.value, payload);
     } else {
       await api.teacherExams.create(payload);
     }
@@ -323,10 +499,9 @@ async function createExam() {
 async function showExamDetails(examId) {
   try {
     const res = await api.teacherExams.details(examId);
-    selectedExam.value = res.data;
+    selectedExamDetails.value = res.data;
 
     const assignmentsRes = await api.teacherExams.assignments(examId);
-    console.log('Student assignments:', assignmentsRes.data); // Добавьте эту строку для отладки
     studentAssignments.value = assignmentsRes.data || [];
   } catch (error) {
     console.error('Failed to fetch exam details:', error);
@@ -351,7 +526,7 @@ function selectStudentFromSearch(student) {
 }
 
 async function addStudentToExam() {
-  if (!studentEmail.value || !selectedExam.value) return;
+  if (!studentEmail.value || !selectedExamDetails.value) return;
 
   addStudentMessage.value = '';
   addStudentMessageType.value = 'error';
@@ -371,14 +546,14 @@ async function addStudentToExam() {
       return;
     }
 
-    await api.teacherExams.assign(selectedExam.value.id, [found.id]);
+    await api.teacherExams.assign(selectedExamDetails.value.id, [found.id]);
 
     addStudentMessageType.value = 'success';
     addStudentMessage.value = 'Student added successfully';
     studentEmail.value = '';
     searchResults.value = [];
 
-    await showExamDetails(selectedExam.value.id);
+    await showExamDetails(selectedExamDetails.value.id);
   } catch (error) {
     console.error('Failed to add student:', error);
     addStudentMessage.value = error.response?.data?.message || 'Failed to add student';
@@ -389,8 +564,9 @@ async function removeStudent(studentId) {
   if (!confirm('Are you sure you want to remove this student?')) return;
 
   try {
-    await api.teacherExams.removeAssignment(selectedExam.value.id, studentId);
-    await showExamDetails(selectedExam.value.id);
+    if (!selectedExamDetails.value) return;
+    await api.teacherExams.removeAssignment(selectedExamDetails.value.id, studentId);
+    await showExamDetails(selectedExamDetails.value.id);
   } catch (error) {
     console.error('Failed to remove student:', error);
     alert('Failed to remove student');
@@ -407,27 +583,186 @@ function getInitials(name) {
   return name.split(' ').map(n => n.charAt(0)).join('').toUpperCase().substring(0, 2);
 }
 
-function editExam(exam) {
+async function editExam(exam) {
   isEditingExam.value = true;
+  editingExamId.value = exam.id;
   newExam.value = {
     title: exam.title,
     description: exam.description,
     durationMinutes: exam.durationMinutes,
     passingScore: exam.passingScore
   };
-  selectedExam.value = exam;
+  await fetchExamQuestions(exam.id);
   showExamModal.value = true;
 }
 
 function closeCreateModal() {
   showExamModal.value = false;
   isEditingExam.value = false;
-  selectedExam.value = null;
+  editingExamId.value = null;
   newExam.value = { title: '', description: '', durationMinutes: 60, passingScore: 60 };
   createError.value = '';
+  examQuestions.value = [];
+  questionsLoading.value = false;
+  questionError.value = '';
+  showQuestionForm.value = false;
+  editingQuestionId.value = null;
+  questionForm.value = getDefaultQuestionForm();
 }
 
 onMounted(fetchExams);
+
+function getDefaultQuestionForm() {
+  return {
+    text: '',
+    type: 'SINGLE_CHOICE',
+    points: 1,
+    options: [
+      { text: '', isCorrect: true },
+      { text: '', isCorrect: false }
+    ]
+  };
+}
+
+async function fetchExamQuestions(examId) {
+  questionsLoading.value = true;
+  questionError.value = '';
+  try {
+    const res = await api.teacherExams.getExamQuestions(examId);
+    examQuestions.value = Array.isArray(res.data) ? res.data : [];
+  } catch (error) {
+    console.error('Failed to load exam questions', error);
+    questionError.value = error.response?.data?.message || 'Unable to load questions';
+  } finally {
+    questionsLoading.value = false;
+  }
+}
+
+function startAddQuestion() {
+  questionForm.value = getDefaultQuestionForm();
+  editingQuestionId.value = null;
+  showQuestionForm.value = true;
+  questionError.value = '';
+}
+
+function startEditQuestion(question) {
+  editingQuestionId.value = question.id;
+  questionForm.value = {
+    text: question.text,
+    type: question.type,
+    points: question.points,
+    options: (question.options || []).map(opt => ({
+      text: opt.text,
+      isCorrect: Boolean(opt.isCorrect)
+    }))
+  };
+  showQuestionForm.value = true;
+  questionError.value = '';
+}
+
+function cancelQuestionForm() {
+  showQuestionForm.value = false;
+  questionError.value = '';
+  editingQuestionId.value = null;
+  questionForm.value = getDefaultQuestionForm();
+}
+
+function addOption() {
+  questionForm.value.options.push({ text: '', isCorrect: false });
+}
+
+function removeOption(index) {
+  questionForm.value.options.splice(index, 1);
+}
+
+async function saveQuestion() {
+  if (!editingExamId.value) return;
+  questionError.value = '';
+
+  const payload = {
+    text: (questionForm.value.text || '').trim(),
+    type: questionForm.value.type,
+    points: questionForm.value.points || 1,
+    options: questionForm.value.type === 'TEXT'
+        ? []
+        : questionForm.value.options.map((option, index) => ({
+          text: option.text,
+          isCorrect: Boolean(option.isCorrect),
+          orderIndex: index
+        }))
+  };
+
+  if (!payload.text) {
+    questionError.value = 'Question text is required';
+    return;
+  }
+  if (payload.type !== 'TEXT') {
+    if (payload.options.length === 0) {
+      questionError.value = 'Add at least one option for choice questions';
+      return;
+    }
+    if (!payload.options.some(opt => opt.isCorrect)) {
+      questionError.value = 'Mark at least one option as correct';
+      return;
+    }
+  }
+
+  try {
+    if (editingQuestionId.value) {
+      await api.teacherExams.updateQuestion(editingQuestionId.value, payload);
+    } else {
+      await api.teacherExams.addQuestion(editingExamId.value, payload);
+    }
+    await fetchExamQuestions(editingExamId.value);
+    cancelQuestionForm();
+  } catch (error) {
+    console.error('Failed to save question', error);
+    questionError.value = error.response?.data?.message || 'Unable to save question';
+  }
+}
+
+async function deleteQuestion(questionId) {
+  if (!editingExamId.value || !confirm('Delete this question?')) return;
+  try {
+    await api.teacherExams.deleteQuestion(questionId);
+    await fetchExamQuestions(editingExamId.value);
+  } catch (error) {
+    console.error('Failed to delete question', error);
+    alert(error.response?.data?.message || 'Unable to delete question');
+  }
+}
+
+function formatQuestionType(type) {
+  switch (type) {
+    case 'SINGLE_CHOICE':
+      return 'Single choice';
+    case 'MULTIPLE_CHOICE':
+      return 'Multiple choice';
+    case 'TEXT':
+    default:
+      return 'Open text';
+  }
+}
+
+async function confirmDeleteExam() {
+  if (!editingExamId.value || !confirm('Delete this exam? This cannot be undone.')) return;
+  try {
+    await api.teacherExams.delete(editingExamId.value);
+    closeCreateModal();
+    await fetchExams();
+  } catch (error) {
+    console.error('Failed to delete exam', error);
+    createError.value = error.response?.data?.message || 'Unable to delete exam';
+  }
+}
+
+function closeExamDetails() {
+  selectedExamDetails.value = null;
+  studentAssignments.value = [];
+  studentEmail.value = '';
+  addStudentMessage.value = '';
+  addStudentMessageType.value = '';
+}
 </script>
 
 <style scoped>
@@ -436,10 +771,14 @@ onMounted(fetchExams);
   background-color: var(--light-blue);
 }
 
+.main-content {
+  padding: 32px 0 48px;
+}
+
 .dashboard-layout-exams {
   background: white;
   border-radius: 12px;
-  padding: 24px;
+  padding: 32px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
@@ -490,6 +829,11 @@ onMounted(fetchExams);
 .email-cell {
   color: var(--text-gray);
   font-size: 13px;
+}
+
+.muted {
+  color: var(--text-gray);
+  font-size: 14px;
 }
 /* Exam Details Styles */
 .exam-header {
@@ -566,6 +910,10 @@ onMounted(fetchExams);
   color: var(--text-dark);
 }
 
+.exam-students-section {
+  margin-top: 32px;
+}
+
 .add-student-section {
   background: #f8f9fa;
   padding: 16px;
@@ -614,6 +962,10 @@ onMounted(fetchExams);
 
   .info-item {
     padding: 10px;
+  }
+
+  .modal-body-grid {
+    grid-template-columns: 1fr;
   }
 
   .name-cell,
@@ -674,14 +1026,14 @@ onMounted(fetchExams);
   border-radius: 12px;
   padding: 24px;
   width: 100%;
-  max-width: 500px;
+  max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
   position: relative;
 }
 
 .wide-modal {
-  max-width: 800px;
+  max-width: 900px;
 }
 
 .close {
@@ -770,6 +1122,241 @@ onMounted(fetchExams);
   background: #e0e0e0;
 }
 
+.submit-btn.tertiary {
+  background: #eef2ff;
+  color: var(--primary-blue);
+}
+
+.submit-btn.tertiary:hover {
+  background: #dbe2ff;
+}
+
+.danger-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.danger-btn:hover {
+  background: #fecaca;
+}
+
+.modal-title {
+  margin: 0 0 12px 0;
+  font-size: 24px;
+}
+
+.modal-body-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.exam-form-section,
+.question-manager {
+  background: #f9fafb;
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.question-manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.question-list {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.question-item {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.question-text {
+  margin: 0 0 8px 0;
+  font-weight: 600;
+  color: #111827;
+}
+
+.question-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-gray);
+  flex-wrap: wrap;
+}
+
+.question-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--primary-blue);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.link-btn.danger {
+  color: #dc2626;
+}
+
+.question-form {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.form-group.two-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.options-builder {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.options-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.option-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.option-row input[type="text"] {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-dark);
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.info-block {
+  background: white;
+  border-radius: 8px;
+  padding: 12px;
+  border: 1px dashed var(--border-color);
+  margin-top: 12px;
+}
+
+.exam-card-wrapper {
+  height: 100%;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.exam-card-wrapper:hover {
+  transform: translateY(-2px);
+}
+
+.exam-card-wrapper :deep(.exam-card) {
+  height: 100%;
+}
+
+.exam-card-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.status-pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  text-transform: capitalize;
+}
+
+.status-pill.published {
+  background: #ecfdf5;
+  color: #15803d;
+}
+
+.status-pill.archived {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-hint {
+  font-size: 12px;
+  color: var(--text-gray);
+}
+
+.publish-btn {
+  border-color: #16a34a;
+  color: #16a34a;
+}
+
+.publish-btn:hover {
+  background: #16a34a;
+  color: white;
+}
+
+.archive-btn {
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+.archive-btn:hover {
+  background: #b91c1c;
+  color: white;
+}
 /* Student Search */
 .email-input-wrapper {
   position: relative;
@@ -848,6 +1435,7 @@ onMounted(fetchExams);
 .students-table-container {
   overflow-x: auto;
   margin-top: 20px;
+  padding-bottom: 12px;
 }
 
 .results-table {

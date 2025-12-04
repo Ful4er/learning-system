@@ -12,11 +12,10 @@ public interface StudentExamService {
     List<ExamResponse> getAssignedExamsForStudent(Long studentId);
     ExamResponse getExamDetails(Long examId, Long studentId);
     List<QuestionResponse> getExamQuestions(Long examId, Long studentId);
-    
-    // Exam attempt functionality
     ExamAttemptResponse startExamAttempt(Long studentId, StartExamAttemptRequest request);
     ExamAttemptResponse finishExamAttempt(Long studentId, Long attemptId);
     ExamAttemptResponse getCurrentAttempt(Long studentId, Long examId);
+    ExamAttemptResponse getAttemptDetails(Long studentId, Long attemptId);
     void submitAnswer(Long studentId, Long attemptId, SubmitAnswerRequest request);
     List<ExamAttemptResponse> getStudentAttempts(Long studentId, Long examId);
 }

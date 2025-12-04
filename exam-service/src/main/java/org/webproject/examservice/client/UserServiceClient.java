@@ -24,36 +24,30 @@ public class UserServiceClient {
 
     public UserDto getUserById(Long userId) {
         try {
-            String url = userServiceUrl + "/api/users/search?id=" + userId;
-            log.info("Searching user by ID: {}", url);
+            String url = userServiceUrl + "/api/users/" + userId;
+            log.info("Requesting user by ID: {}", url);
 
             ResponseEntity<String> rawResponse = restTemplate.getForEntity(url, String.class);
-            log.info("Raw search by ID response: {}", rawResponse.getBody());
-
-            JsonNode jsonArray = objectMapper.readTree(rawResponse.getBody());
-
-            if (jsonArray.isArray() && jsonArray.size() > 0) {
-                JsonNode firstUser = jsonArray.get(0);
-
-                UserDto userDto = new UserDto();
-                userDto.setId(firstUser.has("id") ? firstUser.get("id").asLong() : userId);
-                userDto.setFirstName(firstUser.has("firstName") ? firstUser.get("firstName").asText() : "Unknown");
-                userDto.setLastName(firstUser.has("lastName") ? firstUser.get("lastName").asText() : "Unknown");
-                userDto.setEmail(firstUser.has("email") ? firstUser.get("email").asText() : "Unknown");
-
-                if (firstUser.has("role")) {
-                    userDto.setRole(firstUser.get("role").asText());
-                } else {
-                    userDto.setRole("STUDENT");
-                }
-
-                log.info("Found user by ID: {} {}", userDto.getFirstName(), userDto.getLastName());
-                return userDto;
+            if (!rawResponse.getStatusCode().is2xxSuccessful() || rawResponse.getBody() == null) {
+                log.warn("User service responded with status {} for id {}", rawResponse.getStatusCode(), userId);
+                return createFallbackUser(userId);
             }
 
-            log.warn("No users found for ID: {}", userId);
-            return createFallbackUser(userId);
+            JsonNode userNode = objectMapper.readTree(rawResponse.getBody());
+            if (userNode == null || userNode.isNull()) {
+                log.warn("Empty user payload received for id {}", userId);
+                return createFallbackUser(userId);
+            }
 
+            UserDto userDto = new UserDto();
+            userDto.setId(userNode.has("id") ? userNode.get("id").asLong() : userId);
+            userDto.setFirstName(userNode.has("firstName") ? userNode.get("firstName").asText() : "Unknown");
+            userDto.setLastName(userNode.has("lastName") ? userNode.get("lastName").asText() : "Unknown");
+            userDto.setEmail(userNode.has("email") ? userNode.get("email").asText() : "Unknown");
+            userDto.setRole(userNode.has("role") ? userNode.get("role").asText() : "STUDENT");
+
+            log.info("Resolved user {} {} via user-service", userDto.getFirstName(), userDto.getLastName());
+            return userDto;
         } catch (Exception e) {
             log.error("Failed to fetch user by ID {}: {}", userId, e.getMessage(), e);
             return createFallbackUser(userId);
@@ -63,7 +57,7 @@ public class UserServiceClient {
         UserDto fallback = new UserDto();
         fallback.setId(userId);
         fallback.setFirstName("Student");
-        fallback.setLastName("#" + userId);
+        fallback.setLastName("Unknown");
         fallback.setEmail("student" + userId + "@example.com");
         fallback.setRole("STUDENT");
         return fallback;

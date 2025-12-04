@@ -3,6 +3,7 @@ package org.webproject.examservice.dto.response;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.List;
 
 @Data
 public class ExamAttemptResponse {
@@ -18,6 +19,5 @@ public class ExamAttemptResponse {
     private Integer totalQuestions;
     private Boolean passed;
     private String examTitle;
+    private List<StudentAnswerResponse> answers;
 }
-
-

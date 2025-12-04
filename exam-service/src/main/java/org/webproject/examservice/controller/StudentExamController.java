@@ -60,6 +60,13 @@ public class StudentExamController {
     }
 
     @PreAuthorize("hasRole('STUDENT')")
+    @GetMapping("/attempts/{attemptId}")
+    public ResponseEntity<ExamAttemptResponse> getAttemptDetails(@PathVariable Long attemptId, Authentication authentication) {
+        Long studentId = jwtUtil.getUserId(authentication);
+        return ResponseEntity.ok(examService.getAttemptDetails(studentId, attemptId));
+    }
+
+    @PreAuthorize("hasRole('STUDENT')")
     @GetMapping("/{examId}/current-attempt")
     public ResponseEntity<ExamAttemptResponse> getCurrentAttempt(@PathVariable Long examId, Authentication authentication) {
         Long studentId = jwtUtil.getUserId(authentication);

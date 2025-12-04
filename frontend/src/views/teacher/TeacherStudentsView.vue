@@ -340,7 +340,7 @@ function logout() {
 
 /* Main Content */
 .main-content {
-  padding: 2rem 0;
+  padding: 32px 0 48px;
 }
 
 .dashboard-layout-students {
@@ -350,6 +350,7 @@ function logout() {
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
+  gap: 24px;
 }
 
 .header-section {
@@ -368,6 +369,7 @@ function logout() {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1.5rem;
+  margin-top: 1rem;
 }
 
 .student-card {
@@ -498,18 +500,28 @@ function logout() {
   width: 100%;
   height: 100%;
   background-color: rgba(0, 0, 0, 0.5);
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
+  overflow-y: auto;
+  padding: 40px 16px;
 }
 
 .modal-content {
   background-color: var(--white);
   padding: 2rem;
   border-radius: 12px;
-  width: 90%;
-  max-width: 500px;
+  width: min(620px, 100%);
+  max-height: 90vh;
   position: relative;
   box-shadow: var(--shadow);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.student-details {
+  overflow-y: auto;
+  max-height: calc(90vh - 120px);
 }
 
 .close {
