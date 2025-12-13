@@ -499,7 +499,12 @@ async function showExamDetails(examId) {
 
 function onEmailInput(e) {
   const email = e.target.value.trim();
-  debouncedSearchStudents(email);
+  debouncedSearchStudents(sanitizeEmailString(email));
+}
+
+function sanitizeEmailString(email) {
+  if (!email) return '';
+  return email.replace(/[\u200B\uFEFF\u2060]/g, '').trim();
 }
 
 function hideSearchResults() {
@@ -509,7 +514,7 @@ function hideSearchResults() {
 }
 
 function selectStudentFromSearch(student) {
-  studentEmail.value = student.email;
+  studentEmail.value = sanitizeEmailString(student.email);
   searchResults.value = [];
   showSearchResults.value = false;
 }
@@ -521,7 +526,8 @@ async function addStudentToExam() {
   addStudentMessageType.value = 'error';
 
   try {
-    const userRes = await api.usersSearch.byEmail(studentEmail.value);
+    const cleanEmail = sanitizeEmailString(studentEmail.value);
+    const userRes = await api.usersSearch.byEmail(cleanEmail);
     let found = null;
 
     if (Array.isArray(userRes.data)) {
@@ -530,12 +536,20 @@ async function addStudentToExam() {
       found = userRes.data;
     }
 
-    if (!found || !found.id) {
+    if (!found || !found.email) {
       addStudentMessage.value = 'Student not found';
       return;
     }
 
-    await api.teacherExams.assign(selectedExamDetails.value.id, [found.id]);
+    // Quick client-side check to avoid calling server if already assigned
+    const alreadyAssigned = (studentAssignments.value || []).some(a => (a.studentEmail || '').toLowerCase() === (found.email || '').toLowerCase());
+    if (alreadyAssigned) {
+      addStudentMessage.value = 'Student is already assigned to this exam';
+      addStudentMessageType.value = 'error';
+      return;
+    }
+
+    await api.teacherExams.assign(selectedExamDetails.value.id, [sanitizeEmailString(found.email)]);
 
     addStudentMessageType.value = 'success';
     addStudentMessage.value = 'Student added successfully';
@@ -545,7 +559,14 @@ async function addStudentToExam() {
     await showExamDetails(selectedExamDetails.value.id);
   } catch (error) {
     console.error('Failed to add student:', error);
-    addStudentMessage.value = error.response?.data?.message || 'Failed to add student';
+    const msg = error.response?.data?.message || 'Failed to add student';
+    if (error.response?.status === 404) {
+      addStudentMessage.value = 'Student not found';
+    } else if (error.response?.status === 409) {
+      addStudentMessage.value = 'Student is already assigned';
+    } else {
+      addStudentMessage.value = msg;
+    }
   }
 }
 

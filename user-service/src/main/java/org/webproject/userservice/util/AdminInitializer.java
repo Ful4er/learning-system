@@ -1,6 +1,7 @@
 package org.webproject.userservice.util;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class AdminInitializer {
 
     private final UserRepository userRepository;
@@ -32,7 +34,7 @@ public class AdminInitializer {
 
             userRepository.save(admin);
 
-            System.out.println("Default admin created: admin@example.com / admin123");
+            log.info("Default admin created: admin@example.com / admin123");
         }
 
         String teacherEmail = "teacher1@example.com";
@@ -47,12 +49,12 @@ public class AdminInitializer {
             teacher.setCreatedAt(LocalDateTime.now());
             try {
                 userRepository.save(teacher);
-                System.out.println("Sample teacher created: " + teacherEmail + " / teacher123 (id=" + teacher.getId() + ")");
+                log.info("Sample teacher created: {} / teacher123 (id={})", teacherEmail, teacher.getId());
             } catch (Exception ex) {
                 System.out.println("Failed to create sample teacher with fixed id, saving without id fallback: " + ex.getMessage());
                 teacher.setId(null);
                 userRepository.save(teacher);
-                System.out.println("Sample teacher created (fallback): " + teacherEmail + " / teacher123 (id=" + teacher.getId() + ")");
+                log.info("Sample teacher created (fallback): {} / teacher123 (id={})", teacherEmail, teacher.getId());
             }
         }
 
@@ -70,12 +72,12 @@ public class AdminInitializer {
                 s.setCreatedAt(LocalDateTime.now());
                 try {
                     userRepository.save(s);
-                    System.out.println("Sample student created: " + em + " / student123 (id=" + s.getId() + ")");
+                    log.info("Sample student created: {} / student123 (id={})", em, s.getId());
                 } catch (Exception ex) {
                     System.out.println("Failed to create sample student with fixed id, saving without id fallback: " + ex.getMessage());
                     s.setId(null);
                     userRepository.save(s);
-                    System.out.println("Sample student created (fallback): " + em + " / student123 (id=" + s.getId() + ")");
+                    log.info("Sample student created (fallback): {} / student123 (id={})", em, s.getId());
                 }
             }
         }

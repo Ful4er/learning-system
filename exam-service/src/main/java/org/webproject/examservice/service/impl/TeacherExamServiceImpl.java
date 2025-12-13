@@ -1,6 +1,7 @@
 package org.webproject.examservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.webproject.examservice.client.UserServiceClient;
@@ -33,6 +34,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class TeacherExamServiceImpl implements TeacherExamService {
 
@@ -146,17 +148,56 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
         ensureOwner(exam, teacherId);
+        boolean handled = false;
+        log.info("Assign students called for exam {}: emailsCount={}, idsCount={}", examId, request.getStudentEmails() == null ? 0 : request.getStudentEmails().size(), request.getStudentIds() == null ? 0 : request.getStudentIds().size());
+        if (request.getStudentEmails() != null && !request.getStudentEmails().isEmpty()) {
+            handled = true;
+            for (String studentEmail : request.getStudentEmails()) {
+                if (studentEmail == null || studentEmail.trim().isEmpty()) {
+                    throw new IllegalArgumentException("Student email cannot be empty");
+                }
+                String sanitizedEmail = studentEmail.replaceAll("\\p{C}", "").trim();
+                log.info("AssignStudents: resolving email id for original='{}', sanitized='{}'", studentEmail, sanitizedEmail);
+                UserDto user = userServiceClient.getUserByEmail(sanitizedEmail);
+                if (user == null || user.getId() == null) {
+                    throw new org.webproject.examservice.exception.UserNotFoundException(sanitizedEmail);
+                }
 
-        for (Long studentId : request.getStudentIds()) {
-            Optional<ExamAssignment> existing = examAssignmentRepository.findByExamIdAndStudentId(examId, studentId);
-            if (existing.isPresent()) {
-                throw new StudentAlreadyAssignedException(examId, studentId);
+                Long studentId = user.getId();
+                if (user.getRole() != null && !"STUDENT".equalsIgnoreCase(user.getRole())) {
+                    throw new IllegalArgumentException("User with email " + sanitizedEmail + " is not a student");
+                }
+                Optional<ExamAssignment> existing = examAssignmentRepository.findByExamIdAndStudentId(examId, studentId);
+                if (existing.isPresent()) {
+                    throw new StudentAlreadyAssignedException(examId, sanitizedEmail);
+                }
+
+                ExamAssignment assignment = new ExamAssignment();
+                assignment.setExamId(examId);
+                assignment.setStudentId(studentId);
+                examAssignmentRepository.save(assignment);
             }
+        }
 
-            ExamAssignment assignment = new ExamAssignment();
-            assignment.setExamId(examId);
-            assignment.setStudentId(studentId);
-            examAssignmentRepository.save(assignment);
+        if (request.getStudentIds() != null && !request.getStudentIds().isEmpty()) {
+            handled = true;
+            for (Long studentId : request.getStudentIds()) {
+                if (studentId == null) {
+                    throw new IllegalArgumentException("Student id cannot be null");
+                }
+                Optional<ExamAssignment> existing = examAssignmentRepository.findByExamIdAndStudentId(examId, studentId);
+                if (existing.isPresent()) {
+                    throw new StudentAlreadyAssignedException(examId, studentId);
+                }
+                ExamAssignment assignment = new ExamAssignment();
+                assignment.setExamId(examId);
+                assignment.setStudentId(studentId);
+                examAssignmentRepository.save(assignment);
+            }
+        }
+
+        if (!handled) {
+            throw new IllegalArgumentException("At least one of studentEmails or studentIds must be provided");
         }
     }
 

@@ -2,7 +2,6 @@
   <div class="exam-card">
     <div class="exam-card-header">
       <h3 class="exam-card-title">{{ exam.title }}</h3>
-      <span v-if="exam.statusLabel" class="exam-status-pill" :class="exam.statusClass">{{ exam.statusLabel }}</span>
     </div>
 
     <p v-if="exam.description" class="exam-card-description">{{ exam.description }}</p>
@@ -48,8 +47,7 @@ const props = defineProps({
 }
 .exam-card-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
 }
 .exam-card-title {
   font-size: 16px;
@@ -94,27 +92,8 @@ const props = defineProps({
   display: flex;
   gap: 8px;
   justify-content: flex-end;
-  margin-top: 8px;
 }
-.exam-status-pill {
-  margin-left: 16px;
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 13px;
-  font-weight: 500;
-  background: #f0f4fa;
-  color: #2563eb;
-  min-width: 90px;
-  text-align: center;
-}
-.exam-status-pill.completed {
-  background: #e6f7e6;
-  color: #22c55e;
-}
-.exam-status-pill.pending {
-  background: #fff4e6;
-  color: #f59e42;
-}
+
 @media (max-width: 900px) {
   .exam-card { padding: 14px; }
 }

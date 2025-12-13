@@ -1,6 +1,7 @@
 package org.webproject.userservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,7 @@ import java.util.Optional;
 import static org.webproject.userservice.util.Role.*;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 @Transactional
 public class UserServiceImpl implements UserService {
@@ -84,7 +86,13 @@ public class UserServiceImpl implements UserService {
     }
     @Override
     public List<User> searchStudentsByEmail(String emailPart) {
-        return userRepository.findTop10ByEmailIgnoreCaseContainingAndRole(emailPart, STUDENT);
+        if (emailPart == null) {
+            log.info("searchStudentsByEmail called with null emailPart");
+            return java.util.Collections.emptyList();
+        }
+        String sanitized = emailPart.replaceAll("\\p{C}", "").trim();
+        log.info("searchStudentsByEmail called with emailPart='{}' sanitized='{}'", emailPart, sanitized);
+        return userRepository.findTop10ByEmailIgnoreCaseContainingAndRole(sanitized, STUDENT);
     }
 
     @Override

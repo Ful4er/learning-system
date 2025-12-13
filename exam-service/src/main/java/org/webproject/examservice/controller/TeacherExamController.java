@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 import org.webproject.examservice.dto.request.AddQuestionRequest;
 import org.webproject.examservice.dto.request.AssignStudentsRequest;
 import org.webproject.examservice.dto.request.CreateExamRequest;
@@ -91,7 +92,7 @@ public class TeacherExamController {
     @PreAuthorize("hasRole('TEACHER')")
     @PostMapping("/{examId}/assign")
     public ResponseEntity<Void> assignStudents(@PathVariable Long examId,
-                                              @RequestBody AssignStudentsRequest request,
+                                              @Valid @RequestBody AssignStudentsRequest request,
                                               Authentication authentication) {
         Long teacherId = jwtUtil.getUserId(authentication);
         examService.assignStudents(examId, teacherId, request);

@@ -48,7 +48,7 @@ export default {
     archive: (examId) => axios.post(`/api/teacher/exams/${examId}/archive`),
     details: (examId) => axios.get(`/api/teacher/exams/${examId}`),
     assignments: (examId) => axios.get(`/api/teacher/exams/${examId}/assignments`),
-    assign: (examId, studentIds) => axios.post(`/api/teacher/exams/${examId}/assign`, { studentIds }),
+    assign: (examId, studentEmails) => axios.post(`/api/teacher/exams/${examId}/assign`, { studentEmails }),
     removeAssignment: (examId, studentId) => axios.delete(`/api/teacher/exams/${examId}/assignments/${studentId}`),
     attempts: (examId) => axios.get(`/api/teacher/exams/${examId}/attempts`),
     attemptDetails: (examId, attemptId) => axios.get(`/api/teacher/exams/${examId}/attempts/${attemptId}`)
