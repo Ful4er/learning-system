@@ -26,6 +26,7 @@ import org.webproject.examservice.repository.StudentAnswerRepository;
 import org.webproject.examservice.service.StudentExamService;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -152,7 +153,10 @@ public class StudentExamServiceImpl implements StudentExamService {
     public ExamAttemptResponse finishExamAttempt(Long studentId, Long attemptId) {
         ExamAttempt attempt = examAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new IllegalArgumentException("Attempt not found"));
-        
+        if (expireAttemptIfNeeded(attempt)) {
+            return toExamAttemptResponse(attempt);
+        }
+
         if (!attempt.getStudentId().equals(studentId)) {
             throw new IllegalArgumentException("Attempt does not belong to this student");
         }
@@ -204,7 +208,11 @@ public class StudentExamServiceImpl implements StudentExamService {
     public void submitAnswer(Long studentId, Long attemptId, SubmitAnswerRequest request) {
         ExamAttempt attempt = examAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new IllegalArgumentException("Attempt not found"));
-        
+
+        if (expireAttemptIfNeeded(attempt)) {
+            throw new InvalidExamStateException("Attempt has timed out");
+        }
+
         if (!attempt.getStudentId().equals(studentId)) {
             throw new IllegalArgumentException("Attempt does not belong to this student");
         }
@@ -254,6 +262,22 @@ public class StudentExamServiceImpl implements StudentExamService {
         return attempts.stream()
                 .map(this::toExamAttemptResponse)
                 .collect(Collectors.toList());
+    }
+
+    private boolean expireAttemptIfNeeded(ExamAttempt attempt) {
+        if (attempt == null || attempt.getStatus() != ExamAttempt.AttemptStatus.IN_PROGRESS) return false;
+        Exam exam = examRepository.findById(attempt.getExamId()).orElse(null);
+        if (exam == null || exam.getDurationMinutes() == null) return false;
+        Instant started = attempt.getStartedAt();
+        Instant expiry = started.plus(Duration.ofMinutes(exam.getDurationMinutes()));
+        if (Instant.now().isAfter(expiry)) {
+            attempt.setStatus(ExamAttempt.AttemptStatus.TIMED_OUT);
+            attempt.setFinishedAt(Instant.now());
+            attempt.setCalculatedScore(0.0);
+            examAttemptRepository.save(attempt);
+            return true;
+        }
+        return false;
     }
 
     private double calculateScore(Long attemptId) {

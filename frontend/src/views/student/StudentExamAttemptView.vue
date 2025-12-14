@@ -62,6 +62,7 @@
                         :value="option.id"
                         :checked="isOptionSelected(question.id, option.id)"
                         @change="onOptionChange(question, option.id, $event)"
+                        :disabled="isTimedOut || finishing"
                     >
                     <span>{{ option.text }}</span>
                   </label>
@@ -72,6 +73,7 @@
                       :value="textAnswers[question.id] || ''"
                       @input="onTextInput(question.id, $event.target.value)"
                       placeholder="Type your answer here..."
+                      :disabled="isTimedOut || finishing"
                   />
                   <div class="saving-indicator">
                     <span v-if="savingState[question.id] === 'saving'">Saving...</span>
@@ -86,8 +88,8 @@
 
             <div class="attempt-footer">
               <router-link to="/student/exams" class="exam-btn exam-btn-secondary">Cancel</router-link>
-              <button class="exam-btn exam-btn-primary" :disabled="finishing">
-                {{ finishing ? 'Submitting...' : 'Submit exam' }}
+              <button class="exam-btn exam-btn-primary" :disabled="finishing || isTimedOut">
+                {{ finishing ? 'Submitting...' : (isTimedOut ? "Time's up" : 'Submit exam') }}
               </button>
             </div>
           </form>
@@ -98,7 +100,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import api from '../../api';
 import NavBar from '../../components/NavBar.vue';
@@ -139,6 +141,17 @@ const timeRemaining = computed(() => {
   return `${minutes}m ${seconds}s`;
 });
 
+const isTimedOut = computed(() => {
+  if (!attempt.value?.startedAt || !exam.value?.durationMinutes) return false;
+  const start = new Date(attempt.value.startedAt).getTime();
+  const durationMs = (exam.value.durationMinutes || 0) * 60000;
+  if (durationMs === 0) return false;
+  const endsAt = start + durationMs;
+  return now.value >= endsAt;
+});
+
+const autoFinished = ref(false);
+
 const answeredCount = computed(() => {
   return questions.value.reduce((count, question) => {
     const selections = selectedAnswers.value[question.id] || [];
@@ -174,6 +187,7 @@ function markDirty(questionId) {
 }
 
 function onOptionChange(question, optionId, event) {
+  if (isTimedOut.value) return;
   const current = selectedAnswers.value[question.id] || [];
   let next = [...current];
 
@@ -192,6 +206,7 @@ function onOptionChange(question, optionId, event) {
 }
 
 function onTextInput(questionId, value) {
+  if (isTimedOut.value) return;
   textAnswers.value = {
     ...textAnswers.value,
     [questionId]: value
@@ -304,7 +319,7 @@ async function loadAttempt() {
   }
 }
 
-async function finishAttempt() {
+async function finishAttempt(skipConfirm = false) {
   const pendingSaves = [];
 
   Object.keys(saveTimers).forEach(qid => {
@@ -328,9 +343,11 @@ async function finishAttempt() {
     }
   }
 
-  if (!confirm('Submit your answers? You will not be able to edit afterwards.')) {
-    finishing.value = false;
-    return;
+  if (!skipConfirm) {
+    if (!confirm('Submit your answers? You will not be able to edit afterwards.')) {
+      finishing.value = false;
+      return;
+    }
   }
 
   finishing.value = true;
@@ -366,6 +383,13 @@ onMounted(() => {
   loadAttempt();
   window.addEventListener('beforeunload', handleBeforeUnload);
   startCountdown();
+
+  watch(isTimedOut, (val) => {
+    if (val && !autoFinished.value && !finishing.value) {
+      autoFinished.value = true;
+      finishAttempt(true);
+    }
+  });
 });
 
 onUnmounted(() => {

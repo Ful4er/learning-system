@@ -6,6 +6,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.webproject.examservice.dto.request.StartExamAttemptRequest;
+import org.webproject.examservice.dto.request.SubmitAnswerRequest;
 import org.webproject.examservice.model.StudentAnswer;
 import org.webproject.examservice.exception.ExamNotFoundException;
 import org.webproject.examservice.exception.InvalidExamStateException;
@@ -16,6 +17,8 @@ import org.webproject.examservice.repository.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.Instant;
+import java.time.Duration;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -122,6 +125,53 @@ class StudentExamServiceImplTest {
         assertEquals("FINISHED", response.getStatus());
         assertNotNull(response.getFinishedAt());
         assertEquals(50.0, response.getCalculatedScore());
+    }
+
+    @Test
+    void finishExamAttempt_whenExpired_marksTimedOutAndZeroScore() {
+        ExamAttempt attempt = new ExamAttempt();
+        attempt.setId(200L);
+        attempt.setExamId(9L);
+        attempt.setStudentId(100L);
+        attempt.setStatus(ExamAttempt.AttemptStatus.IN_PROGRESS);
+        attempt.setStartedAt(Instant.now().minus(Duration.ofMinutes(61)));
+
+        Exam exam = new Exam();
+        exam.setId(9L);
+        exam.setDurationMinutes(60);
+
+        when(examAttemptRepository.findById(200L)).thenReturn(Optional.of(attempt));
+        when(examRepository.findById(9L)).thenReturn(Optional.of(exam));
+        when(examAttemptRepository.save(any(ExamAttempt.class))).thenAnswer(i -> i.getArgument(0));
+
+        var response = service.finishExamAttempt(100L, 200L);
+        assertEquals("TIMED_OUT", response.getStatus());
+        assertNotNull(response.getFinishedAt());
+        assertEquals(0.0, response.getCalculatedScore());
+    }
+
+    @Test
+    void submitAnswer_whenExpired_throwsAndMarksTimedOut() {
+        ExamAttempt attempt = new ExamAttempt();
+        attempt.setId(200L);
+        attempt.setExamId(9L);
+        attempt.setStudentId(100L);
+        attempt.setStatus(ExamAttempt.AttemptStatus.IN_PROGRESS);
+        attempt.setStartedAt(Instant.now().minus(Duration.ofMinutes(61)));
+
+        Exam exam = new Exam();
+        exam.setId(9L);
+        exam.setDurationMinutes(60);
+
+        when(examAttemptRepository.findById(200L)).thenReturn(Optional.of(attempt));
+        when(examRepository.findById(9L)).thenReturn(Optional.of(exam));
+        when(examAttemptRepository.save(any(ExamAttempt.class))).thenAnswer(i -> i.getArgument(0));
+
+        SubmitAnswerRequest req = new SubmitAnswerRequest();
+        req.setQuestionId(300L);
+
+        assertThrows(InvalidExamStateException.class, () -> service.submitAnswer(100L, 200L, req));
+        verify(examAttemptRepository, atLeastOnce()).save(argThat(a -> a.getStatus() == ExamAttempt.AttemptStatus.TIMED_OUT));
     }
 }
 
