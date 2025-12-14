@@ -161,14 +161,12 @@ async function fetchStudents() {
   error.value = ''
   try {
     let ids = []
-    // use a map to avoid duplicates and allow merging of partial/user info
     const loadedMap = new Map()
     try {
       const studentsRes = await api.teacherStudents.list();
       const users = studentsRes.data || [];
       if (Array.isArray(users) && users.length > 0) {
         ids = users.map(u => u.id);
-        // preload basic user info into map (keyed by id)
         for (const u of users) {
           loadedMap.set(u.id, { id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email });
         }
@@ -188,7 +186,6 @@ async function fetchStudents() {
       }
       ids = Array.from(studentIdSet)
     }
-    // Try to compute assigned exam counts for each student by scanning exam assignments
     const assignedMap = {};
     try {
       const examsRes = await api.teacherExams.list();
@@ -215,7 +212,6 @@ async function fetchStudents() {
 
     for (const id of ids) {
       try {
-        // reuse preloaded basic user info if available to avoid duplicate entries/requests
         let user = loadedMap.get(id) || null
         if (!user) {
           const userRes = await api.users.byId(id)
@@ -281,14 +277,12 @@ const filteredStudents = computed(() => {
 
 async function showStudentDetails(studentId) {
   showModal.value = true
-  // предварительно используем данные из списка, чтобы имя/почта совпадали с карточкой
   const base = students.value.find(s => s.id === studentId) || null
   selectedStudent.value = base ? { ...base } : null
   studentEnrolledExams.value = []
 
   try {
     const response = await api.teacherStudents.details(studentId)
-    // аккуратно мёрджим, чтобы не перетереть корректное имя "Student2 Test" возможным "Student Unknown"
     selectedStudent.value = {
       ...(selectedStudent.value || {}),
       ...(response.data || {})
@@ -298,7 +292,6 @@ async function showStudentDetails(studentId) {
       const resultsRes = await api.teacherStudents.results(studentId)
       const results = resultsRes.data || []
 
-      // Only show exams where the student is actually assigned
       const assignedResults = results.filter(r => r.assigned)
 
       const examsData = []
@@ -347,7 +340,6 @@ function formatDate(dateString) {
 
 function formatShortDate(dateString) {
   if (!dateString) return 'N/A'
-  // compact date for cards so layout stays in one line
   return new Date(dateString).toLocaleDateString(undefined, {
     year: '2-digit',
     month: 'short',
@@ -445,9 +437,7 @@ function goToExams() {
   box-shadow: var(--shadow-sm);
   transform: translateY(-2px);
 }
-/* Avatar removed: keep classes for legacy compatibility but hide */
-.student-avatar-grid { display: none; }
-.student-avatar { display: none; }
+
 .student-info {
   flex: 1;
   width: 100%;

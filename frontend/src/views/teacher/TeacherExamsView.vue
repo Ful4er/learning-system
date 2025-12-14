@@ -274,7 +274,6 @@
               <ExamCard
                   :exam="{
                     ...exam,
-                    // teacher identity is obvious here, no need to show name block
                     questionCount: exam.questionCount || 0
                   }"
               >
@@ -430,7 +429,6 @@ async function fetchExams() {
     const res = await api.teacherExams.list();
     exams.value = res.data || [];
 
-    // Fetch assignment counts for each exam
     for (let exam of exams.value) {
       try {
         const assignments = await api.teacherExams.assignments(exam.id);
@@ -558,7 +556,6 @@ async function addStudentToExam() {
       return;
     }
 
-    // Quick client-side check to avoid calling server if already assigned
     const alreadyAssigned = (studentAssignments.value || []).some(a => (a.studentEmail || '').toLowerCase() === (found.email || '').toLowerCase());
     if (alreadyAssigned) {
       addStudentMessage.value = 'Student is already assigned to this exam';

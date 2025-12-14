@@ -272,7 +272,6 @@ async function startExam(exam) {
     resumeAttempt(exam.id, state.activeAttemptId);
     return;
   }
-  // Only one attempt per exam is allowed
   if (state.status === 'completed') {
     alert('You have already completed this exam. Only one attempt is allowed.');
     return;

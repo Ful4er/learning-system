@@ -266,7 +266,6 @@ function setExamState(examId, updates) {
 function transformExam(exam) {
   return {
     ...exam,
-    // teacher info is shown in the details modal where we load full teacher profile
     questionCount: exam.questionCount || 0
   };
 }
@@ -305,7 +304,6 @@ async function fetchExams() {
     const res = await api.studentExams.list();
     exams.value = res.data || [];
     await Promise.all(exams.value.map(exam => hydrateExamState(exam.id)));
-    // open details if we came here with examId in query (e.g. from profile dashboard)
     const initialExamId = route.query.examId ? Number(route.query.examId) : null;
     if (initialExamId && exams.value.some(e => e.id === initialExamId)) {
       const exam = exams.value.find(e => e.id === initialExamId);
@@ -346,12 +344,10 @@ async function hydrateExamState(examId) {
 
 async function startExam(exam) {
   const state = getExamState(exam.id);
-  // Continue active attempt if it exists
   if (state.activeAttemptId) {
     router.push(`/student/exams/${exam.id}/attempt/${state.activeAttemptId}`);
     return;
   }
-  // Only one attempt per exam is allowed
   if (state.status === 'completed') {
     alert('You have already completed this exam. Only one attempt is allowed.');
     return;

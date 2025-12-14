@@ -101,11 +101,9 @@ router.beforeEach(async (to, from, next) => {
         return next({ path: '/auth', query: { redirect: to.fullPath } });
     }
 
-    // Role-based route guarding: make sure only teacher can access /teacher/* and student - /student/*
     const needsTeacher = to.path.startsWith('/teacher');
     const needsStudent = to.path.startsWith('/student');
 
-    // If a role is required and we have a token but no cached role, try to fetch it
     if (token && (needsTeacher || needsStudent)) {
         let role = localStorage.getItem('userRole');
         if (!role) {
@@ -116,7 +114,6 @@ router.beforeEach(async (to, from, next) => {
                     localStorage.setItem('userRole', role);
                 }
             } catch (e) {
-                // If we cannot determine role, clear session and force auth
                 console.warn('Could not determine user role during navigation, redirecting to auth.', e?.message || e);
                 localStorage.removeItem('token');
                 localStorage.removeItem('userId');
@@ -126,7 +123,6 @@ router.beforeEach(async (to, from, next) => {
             }
         }
 
-        // Now enforce role restrictions
         const currentRole = localStorage.getItem('userRole');
         if (needsTeacher && currentRole !== 'TEACHER') {
             const redirect = currentRole === 'STUDENT' ? '/student/profile' : '/auth';
