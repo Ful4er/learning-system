@@ -59,9 +59,9 @@
                         {{ exam.questionCount || 0 }} questions · {{ exam.durationMinutes }} min
                       </p>
                     </div>
-                    <span class="status-pill" :class="getExamState(exam.id).status">
-                      {{ statusLabel(getExamState(exam.id).status) }}
-                    </span>
+                      <span class="status-pill" :class="examDisplayStatus(exam)">
+                        {{ statusLabel(examDisplayStatus(exam)) }}
+                      </span>
                   </div>
                   <div class="recent-exam-meta">
                     <div v-if="getExamState(exam.id).lastScore != null">
@@ -196,13 +196,30 @@ function setExamState(examId, updates) {
 
 function statusLabel(status) {
   switch (status) {
-    case 'completed':
-      return 'Completed';
     case 'in-progress':
       return 'In progress';
+    case 'passed':
+      return 'Passed';
+    case 'failed':
+      return 'Failed';
+    case 'completed':
+      return 'Completed';
     default:
       return 'Ready';
   }
+}
+
+function examDisplayStatus(exam) {
+  const state = getExamState(exam.id);
+  if (state.status === 'in-progress') return 'in-progress';
+  if (state.status === 'available') return 'available';
+  if (state.status === 'completed') {
+    const last = state.lastScore;
+    const passing = exam.passingScore;
+    if (last == null || passing == null) return 'completed';
+    return last >= passing ? 'passed' : 'failed';
+  }
+  return 'available';
 }
 
 async function loadUserProfile() {
@@ -473,9 +490,15 @@ onMounted(initialize);
   height: fit-content;
 }
 
-.status-pill.completed {
+.status-pill.completed,
+.status-pill.passed {
   background: #ecfdf5;
   color: #15803d;
+}
+
+.status-pill.failed {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .status-pill.in-progress {

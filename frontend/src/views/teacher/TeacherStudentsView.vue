@@ -36,17 +36,16 @@
                  :key="student.id"
                  class="student-card"
                  @click="showStudentDetails(student.id)">
-              <div class="student-avatar-grid">
-                <div class="student-avatar">
-                  <span>{{ getInitials(student.firstName, student.lastName) }}</span>
-                </div>
-              </div>
 
               <div class="student-info">
                 <h3>{{ student.firstName }} {{ student.lastName }}</h3>
                 <p class="muted">{{ student.email }}</p>
                 <div class="student-stats">
                   <div class="stat">
+                    <span class="stat-label">Assigned</span>
+                    <span class="stat-value">{{ student.assignedCount || 0 }}</span>
+                  </div>
+                  <div class="stat" style="margin-left:12px;">
                     <span class="stat-label">Completed</span>
                     <span class="stat-value">{{ student.completedCount || 0 }}</span>
                   </div>
@@ -54,20 +53,19 @@
                     <span class="stat-label">Avg</span>
                     <span class="stat-value">{{ student.averageScore != null ? student.averageScore : '-' }}</span>
                   </div>
-                  <div class="stat" style="margin-left:12px;">
-                    <span class="stat-label">Last</span>
-                    <span class="stat-value">{{ student.lastCompletedAt ? formatShortDate(student.lastCompletedAt) : '-' }}</span>
-                  </div>
                 </div>
                 <div class="card-actions">
-                  <button class="btn small" @click.stop="showStudentDetails(student.id)">View Results</button>
+                  <button class="exam-btn view-btn" @click.stop="showStudentDetails(student.id)">View Results</button>
                 </div>
               </div>
             </div>
 
             <!-- Empty State -->
             <div v-if="filteredStudents.length === 0" class="empty-state">
-              <p>No students found — assign exams or invite students to register.</p>
+              <div class="empty-state-icon">🎓</div>
+              <h3 class="empty-state-title">No Students Yet</h3>
+              <p class="empty-state-message">Assign exams or invite students to register.</p>
+              <button @click="goToExams" class="submit-btn primary">Assign Exam</button>
             </div>
           </div>
         </div>
@@ -87,6 +85,9 @@
             <strong>Email:</strong> {{ selectedStudent.email }}
           </div>
           <div class="student-detail-item">
+            <strong>Assigned exams:</strong> {{ selectedStudent.assignedCount || 0 }}
+          </div>
+          <div class="student-detail-item">
             <strong>Joined:</strong> {{ formatDate(selectedStudent.createdAt) }}
           </div>
 
@@ -102,8 +103,8 @@
                 </div>
                 <div class="exam-details-row">
                   <span class="detail-label">Status:</span>
-                  <span :class="['status-badge', exam.lastAttemptFinishedAt ? 'completed' : 'pending']">
-                    {{ exam.lastAttemptFinishedAt ? 'Completed' : 'Pending' }}
+                  <span :class="['status-badge', exam.lastAttemptFinishedAt ? (exam.passed ? 'passed' : 'failed') : 'pending']">
+                    {{ exam.lastAttemptFinishedAt ? (exam.passed ? 'Passed' : 'Failed') : 'Pending' }}
                   </span>
                 </div>
                 <div v-if="exam.lastAttemptScore != null" class="exam-details-row">
@@ -160,15 +161,16 @@ async function fetchStudents() {
   error.value = ''
   try {
     let ids = []
-    const loaded = []
+    // use a map to avoid duplicates and allow merging of partial/user info
+    const loadedMap = new Map()
     try {
       const studentsRes = await api.teacherStudents.list();
       const users = studentsRes.data || [];
       if (Array.isArray(users) && users.length > 0) {
         ids = users.map(u => u.id);
-        // preload basic user info into loaded
+        // preload basic user info into map (keyed by id)
         for (const u of users) {
-          loaded.push({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email });
+          loadedMap.set(u.id, { id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email });
         }
       }
     } catch (e) {
@@ -186,10 +188,39 @@ async function fetchStudents() {
       }
       ids = Array.from(studentIdSet)
     }
+    // Try to compute assigned exam counts for each student by scanning exam assignments
+    const assignedMap = {};
+    try {
+      const examsRes = await api.teacherExams.list();
+      const exams = examsRes.data || [];
+      const seenPairs = new Set();
+      for (const exam of exams) {
+        try {
+          const assignmentsRes = await api.teacherExams.assignments(exam.id);
+          const assignments = assignmentsRes.data || [];
+          assignments.forEach(a => {
+            const key = `${a.studentId}:${exam.id}`;
+            if (!seenPairs.has(key)) {
+              seenPairs.add(key);
+              assignedMap[a.studentId] = (assignedMap[a.studentId] || 0) + 1;
+            }
+          });
+        } catch (e) {
+          // ignore per-exam assignment errors
+        }
+      }
+    } catch (e) {
+      // ignore overall exam list failure
+    }
+
     for (const id of ids) {
       try {
-        const userRes = await api.users.byId(id)
-        const user = userRes.data
+        // reuse preloaded basic user info if available to avoid duplicate entries/requests
+        let user = loadedMap.get(id) || null
+        if (!user) {
+          const userRes = await api.users.byId(id)
+          user = userRes.data
+        }
 
         const resultsRes = await api.teacherStudents.results(id)
         const results = resultsRes.data || []
@@ -208,21 +239,22 @@ async function fetchStudents() {
 
         const avgScore = scores.length ? Math.round((scores.reduce((s, v) => s + v, 0) / scores.length) * 100) / 100 : null
 
-        loaded.push({
+        loadedMap.set(id, {
           id: user.id,
           firstName: user.firstName,
           lastName: user.lastName,
           email: user.email,
           completedCount: completed,
           averageScore: avgScore,
-          lastCompletedAt
+          lastCompletedAt,
+          assignedCount: assignedMap[user.id] || 0
         })
       } catch (err) {
         console.error('Error loading student', id, err)
       }
     }
 
-    students.value = loaded
+    students.value = Array.from(loadedMap.values())
   } catch (err) {
     error.value = err.response?.data?.message || 'Failed to load students'
     console.error('Error fetching students:', err)
@@ -266,17 +298,22 @@ async function showStudentDetails(studentId) {
       const resultsRes = await api.teacherStudents.results(studentId)
       const results = resultsRes.data || []
 
+      // Only show exams where the student is actually assigned
+      const assignedResults = results.filter(r => r.assigned)
+
       const examsData = []
-      for (const result of results) {
+      for (const result of assignedResults) {
         try {
           const examRes = await api.teacherExams.details(result.examId)
-          examsData.push({
-            id: result.examId,
-            title: examRes.data.title,
-            durationMinutes: examRes.data.durationMinutes,
-            lastAttemptScore: result.lastAttemptScore,
-            lastAttemptFinishedAt: result.lastAttemptFinishedAt
-          })
+            examsData.push({
+              id: result.examId,
+              title: examRes.data.title,
+              durationMinutes: examRes.data.durationMinutes,
+              lastAttemptScore: result.lastAttemptScore,
+              lastAttemptFinishedAt: result.lastAttemptFinishedAt,
+              passingScore: result.passingScore,
+              passed: (result.lastAttemptScore != null && result.passingScore != null && result.lastAttemptScore >= result.passingScore)
+            })
         } catch (e) {
           console.error('Error fetching exam details:', e)
         }
@@ -328,6 +365,10 @@ function logout() {
   localStorage.removeItem('userRole')
   router.push('/auth')
 }
+
+function goToExams() {
+  router.push('/teacher/exams')
+}
 </script>
 <style>
 :root {
@@ -340,11 +381,6 @@ function logout() {
   --white: #ffffff;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
   --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.teacher-students {
-  min-height: 100vh;
-  background-color: #f8f9fa;
 }
 
 
@@ -370,7 +406,9 @@ function logout() {
 }
 
 .header-section {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .card-title {
@@ -390,16 +428,16 @@ function logout() {
 
 .student-card {
   background: var(--white);
-  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  flex-direction: row;
+  gap: 1rem;
   align-items: center;
-  text-align: center;
+  text-align: left;
+  box-shadow: 0 2px 12px #0000000f;
 }
 
 .student-card:hover {
@@ -407,28 +445,9 @@ function logout() {
   box-shadow: var(--shadow-sm);
   transform: translateY(-2px);
 }
-
-.student-avatar-grid {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.5rem;
-}
-
-.student-avatar {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: var(--primary-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--white);
-  font-weight: 600;
-  font-size: 1.25rem;
-  flex-shrink: 0;
-}
-
+/* Avatar removed: keep classes for legacy compatibility but hide */
+.student-avatar-grid { display: none; }
+.student-avatar { display: none; }
 .student-info {
   flex: 1;
   width: 100%;
@@ -501,9 +520,24 @@ function logout() {
 /* Empty State */
 .empty-state {
   text-align: center;
-  padding: 3rem;
+  padding: 60px 20px;
   color: var(--text-light);
-  grid-column: 1 / -1;
+}
+
+.empty-state-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-state-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-dark);
+}
+
+.empty-state-message {
+  margin-bottom: 24px;
 }
 
 /* Modal */
@@ -634,9 +668,14 @@ function logout() {
   font-weight: 600;
 }
 
-.status-badge.completed {
+.status-badge.passed {
   background: #dcfce7;
   color: #166534;
+}
+
+.status-badge.failed {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .status-badge.pending {
@@ -717,19 +756,31 @@ function logout() {
 .card-actions {
   margin-top: 0.75rem;
   width: 100%;
+  display: flex;
+  justify-content: flex-end;
 }
-.btn.small {
-  padding: 0.5rem 0.9rem;
-  font-size: 0.9rem;
-  border-radius: 999px;
-  border: none;
-  background: var(--primary-color);
-  color: #fff;
+
+/* Use exam button styles for student action buttons */
+.exam-btn {
+  padding: 8px 16px;
+  border: 1px solid;
+  border-radius: 6px;
   cursor: pointer;
-  width: 100%;
-  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s;
+  flex: 1;
 }
-.btn.small:hover { background: #1d4ed8; }
+
+.view-btn {
+  background: white;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.view-btn:hover {
+  background: var(--primary-color);
+  color: white;
+}
 
 @media (max-width: 768px) {
   .header-controls {

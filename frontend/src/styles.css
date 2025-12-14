@@ -5,6 +5,12 @@
 body {
   margin: 0;
   font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+}
+
+/* Reserve space for the vertical scrollbar to avoid layout shift when it appears */
+html {
+  scrollbar-gutter: stable;
 }
 
 /* Global layout helpers */

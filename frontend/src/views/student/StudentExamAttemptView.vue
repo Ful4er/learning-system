@@ -80,11 +80,7 @@
                   </div>
                 </div>
 
-                <div class="question-actions">
-                  <button type="button" class="exam-btn exam-btn-secondary ghost" @click="saveAnswer(question.id)">
-                    Save answer
-                  </button>
-                </div>
+                <!-- Auto-save is handled on input/change; no per-question save button -->
               </article>
             </div>
 
@@ -174,6 +170,8 @@ function isOptionSelected(questionId, optionId) {
 function markDirty(questionId) {
   dirtyQuestions.value.add(questionId);
   debouncedSaveAnswer(questionId);
+  // persist draft in case of network failure
+  persistDraft();
 }
 
 function onOptionChange(question, optionId, event) {
@@ -308,9 +306,38 @@ async function loadAttempt() {
 }
 
 async function finishAttempt() {
+  // Flush pending auto-saves and ensure all answers are saved before final submit
+  const pendingSaves = [];
+
+  // Clear existing timers and trigger immediate save
+  Object.keys(saveTimers).forEach(qid => {
+    try { clearTimeout(saveTimers[qid]); } catch (e) {}
+    delete saveTimers[qid];
+    pendingSaves.push(saveAnswer(qid));
+  });
+
+  // Save any remaining dirty questions
+  dirtyQuestions.value.forEach(qid => {
+    pendingSaves.push(saveAnswer(qid));
+  });
+
+  if (pendingSaves.length > 0) {
+    finishing.value = true;
+    await Promise.allSettled(pendingSaves);
+    // if any save failed or still dirty, abort submission
+    const hasError = Object.values(savingState.value).some(s => s === 'error');
+    if (hasError || dirtyQuestions.value.size > 0) {
+      finishing.value = false;
+      alert('Some answers failed to save. Please check your connection and try again.');
+      return;
+    }
+  }
+
   if (!confirm('Submit your answers? You will not be able to edit afterwards.')) {
+    finishing.value = false;
     return;
   }
+
   finishing.value = true;
   try {
     await api.studentExams.finishAttempt(attemptId);

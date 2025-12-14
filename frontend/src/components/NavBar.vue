@@ -60,7 +60,7 @@ async function onLogout() {
   align-items: center;
   justify-content: space-between;
   padding-top: 20px;
-  padding-bottom: 5px;
+  padding-bottom: 10px;
 }
 .nav-links {
   display: flex;
@@ -68,6 +68,7 @@ async function onLogout() {
   list-style: none;
   margin: 0;
   padding: 0;
+  font-size: large;
 }
 .nav-link {
   color: #333;

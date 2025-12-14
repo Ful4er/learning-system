@@ -238,9 +238,9 @@
                           {{ assignment.studentEmail || 'N/A' }}
                         </td>
                         <td>
-                  <span :class="['status', assignment.completedAt ? 'completed' : 'pending']">
-                    {{ assignment.completedAt ? 'Completed' : 'Pending' }}
-                  </span>
+                    <span :class="['status', assignmentStatus(assignment)]">
+                      {{ assignmentStatusLabel(assignment) }}
+                    </span>
                         </td>
                         <td class="score-cell">{{ assignment.score || '-' }}</td>
                         <td class="date-cell">{{ assignment.completedAt ? formatDate(assignment.completedAt) : '-' }}</td>
@@ -494,6 +494,23 @@ async function showExamDetails(examId) {
     studentAssignments.value = assignmentsRes.data || [];
   } catch (error) {
     console.error('Failed to fetch exam details:', error);
+  }
+}
+
+function assignmentStatus(assignment) {
+  if (!assignment || !assignment.completedAt) return 'pending';
+  const passing = selectedExamDetails.value?.passingScore;
+  if (passing == null || assignment.score == null) return 'completed';
+  return assignment.score >= passing ? 'passed' : 'failed';
+}
+
+function assignmentStatusLabel(assignment) {
+  const s = assignmentStatus(assignment);
+  switch (s) {
+    case 'passed': return 'Passed';
+    case 'failed': return 'Failed';
+    case 'completed': return 'Completed';
+    default: return 'Pending';
   }
 }
 
@@ -785,20 +802,22 @@ function closeExamDetails() {
   padding: 32px 0 48px;
 }
 
-.dashboard-layout-exams {
-  background: white;
-  border-radius: 12px;
-  padding: 32px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  display: flex;
-  flex-direction: column;
-}
+  .dashboard-layout-exams {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+  }
 
 .header-section {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
   flex-wrap: nowrap;
   gap: 12px;
 }
@@ -1493,9 +1512,15 @@ function closeExamDetails() {
   font-weight: 500;
 }
 
-.status.completed {
+.status.completed,
+.status.passed {
   background: #dcfce7;
   color: #166534;
+}
+
+.status.failed {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .status.pending {

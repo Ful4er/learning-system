@@ -59,8 +59,8 @@
               class="exam-card-wrapper"
           >
             <div class="exam-status-row">
-              <span class="status-pill" :class="getExamState(exam.id).status">
-                {{ statusLabel(getExamState(exam.id).status) }}
+              <span class="status-pill" :class="examDisplayStatus(exam)">
+                {{ statusLabel(examDisplayStatus(exam)) }}
               </span>
               <span class="score-pill" v-if="getExamState(exam.id).lastScore != null">
                 Last score: {{ formatScore(getExamState(exam.id).lastScore) }}
@@ -71,7 +71,7 @@
               <template #actions>
                 <button
                     @click.stop="startExam(exam)"
-                    class="exam-btn exam-btn-primary"
+                    class="exam-btn edit-btn"
                     :disabled="startingAttemptFor === exam.id"
                 >
                   <span v-if="startingAttemptFor === exam.id">Starting...</span>
@@ -80,7 +80,7 @@
                 </button>
                 <button
                     @click.stop="viewDetails(exam)"
-                    class="exam-btn exam-btn-secondary"
+                    class="exam-btn view-btn"
                 >
                   Details
                 </button>
@@ -275,11 +275,28 @@ function statusLabel(status) {
   switch (status) {
     case 'in-progress':
       return 'In progress';
+    case 'passed':
+      return 'Passed';
+    case 'failed':
+      return 'Failed';
     case 'completed':
       return 'Completed';
     default:
       return 'Ready';
   }
+}
+
+function examDisplayStatus(exam) {
+  const state = getExamState(exam.id);
+  if (state.status === 'in-progress') return 'in-progress';
+  if (state.status === 'available') return 'available';
+  if (state.status === 'completed') {
+    const last = state.lastScore;
+    const passing = exam.passingScore;
+    if (last == null || passing == null) return 'completed';
+    return last >= passing ? 'passed' : 'failed';
+  }
+  return 'available';
 }
 
 async function fetchExams() {
@@ -579,9 +596,15 @@ onMounted(fetchExams);
   color: #c2410c;
 }
 
-.status-pill.completed {
+.status-pill.completed,
+.status-pill.passed {
   background: #ecfdf5;
   color: #15803d;
+}
+
+.status-pill.failed {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 .score-pill {
@@ -733,33 +756,36 @@ onMounted(fetchExams);
   min-width: 110px;
 }
 
-.exam-btn-primary,
-.exam-btn-secondary {
-  border-radius: 999px;
+.exam-btn {
+  flex: 1;
   padding: 8px 16px;
+  border: 1px solid;
+  border-radius: 6px;
+  cursor: pointer;
   font-size: 14px;
-  font-weight: 500;
+  transition: all .2s;
 }
 
-.exam-btn-primary {
+.edit-btn {
+  background: #fff;
+  border-color: var(--primary-blue);
+  color: var(--primary-blue);
+}
+
+.edit-btn:hover {
   background: var(--primary-blue);
   color: #fff;
-  border: none;
 }
 
-.exam-btn-primary:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
+.view-btn {
+  background: #fff;
+  border-color: var(--text-gray);
+  color: var(--text-gray);
 }
 
-.exam-btn-secondary {
-  background: #ffffff;
-  color: var(--text-dark);
-  border: 1px solid var(--border-color);
-}
-
-.exam-btn-secondary:hover {
-  background: #f3f4ff;
+.view-btn:hover {
+  background: var(--text-gray);
+  color: #fff;
 }
 
 @media (max-width: 992px) {

@@ -1,8 +1,11 @@
 <template>
   <div class="exam-card">
     <div class="exam-card-header">
-      <h3 class="exam-card-title">{{ exam.title }}</h3>
-    </div>
+        <h3 class="exam-card-title">{{ exam.title }}</h3>
+        <div v-if="status" class="exam-status-badge">
+          <span class="badge" :class="status">{{ statusLabel(status) }}</span>
+        </div>
+      </div>
 
     <p v-if="exam.description" class="exam-card-description">{{ exam.description }}</p>
 
@@ -31,8 +34,20 @@
 
 <script setup>
 const props = defineProps({
-  exam: { type: Object, required: true }
+  exam: { type: Object, required: true },
+  status: { type: String, required: false },
+  lastScore: { type: [Number, null], required: false }
 });
+
+function statusLabel(s) {
+  switch (s) {
+    case 'in-progress': return 'In progress';
+    case 'passed': return 'Passed';
+    case 'failed': return 'Failed';
+    case 'completed': return 'Completed';
+    default: return 'Ready';
+  }
+}
 </script>
 
 <style scoped>
@@ -53,6 +68,30 @@ const props = defineProps({
   font-size: 16px;
   margin: 0;
   font-weight: 600;
+}
+.exam-status-badge {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+.exam-status-badge .badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+.exam-status-badge .badge.passed,
+.exam-status-badge .badge.completed {
+  background: #ecfdf5;
+  color: #15803d;
+}
+.exam-status-badge .badge.failed {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.exam-status-badge .badge.in-progress {
+  background: #fff7ed;
+  color: #c2410c;
 }
 .exam-card-description {
   color: #666666;
