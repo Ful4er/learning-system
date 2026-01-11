@@ -19,7 +19,7 @@ services:
     image: mysql:8.0
     container_name: learning-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-changeme}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD:-password}
       MYSQL_DATABASE: learning_db
     ports:
       - "3306:3306"
@@ -28,7 +28,7 @@ services:
     networks:
       - learning-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_PASSWORD:-changeme}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_PASSWORD:-password}"]
       interval: 10s
       timeout: 5s
       retries: 10
