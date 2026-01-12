@@ -5,6 +5,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.CacheManager;
 import org.webproject.userservice.exception.UserNotFoundException;
 import org.webproject.userservice.model.User;
 import org.webproject.userservice.repository.UserRepository;
@@ -23,6 +24,9 @@ class AdminServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private CacheManager cacheManager;
 
     @InjectMocks
     private AdminServiceImpl adminService;
@@ -63,7 +67,9 @@ class AdminServiceImplTest {
     @Test
     void deleteUser_Success() {
         Long userId = 2L;
-        when(userRepository.existsById(userId)).thenReturn(true);
+        User user = new User();
+        user.setId(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         adminService.deleteUser(userId);
 
@@ -72,7 +78,7 @@ class AdminServiceImplTest {
 
     @Test
     void deleteUser_NotFound_Throws() {
-        when(userRepository.existsById(404L)).thenReturn(false);
+        when(userRepository.findById(404L)).thenReturn(Optional.empty());
 
         assertThrows(UserNotFoundException.class,
                 () -> adminService.deleteUser(404L));

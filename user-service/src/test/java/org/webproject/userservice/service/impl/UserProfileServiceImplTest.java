@@ -5,6 +5,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.CacheManager;
 import org.webproject.userservice.dto.request.UserProfileRequest;
 import org.webproject.userservice.dto.response.UserProfileResponse;
 import org.webproject.userservice.model.User;
@@ -23,6 +24,9 @@ class UserProfileServiceImplTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private CacheManager cacheManager;
 
     @InjectMocks
     private UserProfileServiceImpl userProfileService;
@@ -65,7 +69,7 @@ class UserProfileServiceImplTest {
         User savedUser = new User();
         savedUser.setId(userId);
         UserProfile savedProfile = new UserProfile();
-        savedProfile.setAvatarUrl("http://new");
+        savedProfile.setAvatarUrl("https://new");
         savedProfile.setPhoneNumber("123");
         savedProfile.setDateOfBirth(LocalDate.of(2000,1,1));
         savedProfile.setUser(savedUser);
@@ -75,14 +79,14 @@ class UserProfileServiceImplTest {
         when(userRepository.save(any(User.class))).thenReturn(savedUser);
 
         UserProfileRequest request = new UserProfileRequest();
-        request.setAvatarUrl("http://new");
+        request.setAvatarUrl("https://new");
         request.setPhoneNumber("123");
         request.setDateOfBirth(LocalDate.of(2000,1,1));
 
         UserProfileResponse response = userProfileService.updateProfile(userId, request);
 
         assertEquals(userId, response.getUserId());
-        assertEquals("http://new", response.getAvatarUrl());
+        assertEquals("https://new", response.getAvatarUrl());
         assertEquals("123", response.getPhoneNumber());
         assertEquals(LocalDate.of(2000,1,1), response.getDateOfBirth());
         verify(userRepository).save(any(User.class));

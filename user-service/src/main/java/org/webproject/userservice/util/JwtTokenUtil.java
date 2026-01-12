@@ -6,12 +6,14 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.webproject.userservice.config.JwtConfig;
+import org.webproject.userservice.config.JwtTokenCacheService;
 import org.webproject.userservice.model.User;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 
 @Component
@@ -20,6 +22,7 @@ public class JwtTokenUtil {
 
     private final JwtConfig jwtConfig;
     private final SecretKey secretKey;
+    private final JwtTokenCacheService tokenCacheService;
 
     public String generateToken(User user) {
         Map<String, Object> claims = new HashMap<>();
@@ -41,9 +44,19 @@ public class JwtTokenUtil {
     }
 
     public Boolean validateToken(String token) {
+        String tokenHash = tokenCacheService.hashToken(token);
+        if (tokenCacheService.isBlacklisted(tokenHash)) {
+            return false;
+        }
+        Optional<Boolean> cachedValidation = tokenCacheService.getCachedValidation(tokenHash);
+        if (cachedValidation.isPresent()) {
+            return cachedValidation.get();
+        }
+
         try {
-            extractAllClaims(token);
-            return !isTokenExpired(token);
+            boolean isValid = !isTokenExpired(token) && extractAllClaims(token) != null;
+            tokenCacheService.cacheValidation(tokenHash, isValid);
+            return isValid;
         } catch (Exception e) {
             return false;
         }

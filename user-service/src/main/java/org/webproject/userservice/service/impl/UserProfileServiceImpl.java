@@ -1,6 +1,9 @@
 package org.webproject.userservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.webproject.userservice.dto.request.UserProfileRequest;
@@ -17,6 +20,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class UserProfileServiceImpl implements UserProfileService {
     private final UserRepository userRepository;
+    private final CacheManager cacheManager;
 
     @Override
     @Transactional(readOnly = true)
@@ -27,6 +31,12 @@ public class UserProfileServiceImpl implements UserProfileService {
 
     @Override
     @Transactional
+    @Caching(
+            evict = {
+                    @CacheEvict(value = "users", key = "#userId"),
+                    @CacheEvict(value = "user-current", key = "#userId")
+            }
+    )
     public UserProfileResponse updateProfile(Long userId, UserProfileRequest request) {
         User user = userRepository.findByIdWithProfile(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found with id: " + userId));
@@ -41,6 +51,12 @@ public class UserProfileServiceImpl implements UserProfileService {
         user.getProfile().setDateOfBirth(request.getDateOfBirth());
 
         User savedUser = userRepository.save(user);
+
+        var cache = cacheManager.getCache("users");
+        if (cache != null && savedUser.getEmail() != null) {
+            cache.evict("email:" + savedUser.getEmail());
+        }
+        
         return new UserProfileResponse(savedUser, savedUser.getProfile());
     }
 }

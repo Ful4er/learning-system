@@ -1,5 +1,6 @@
 package org.webproject.userservice.controller;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -42,8 +43,13 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<AuthResponse> logout() {
-        authService.logout();
+    public ResponseEntity<AuthResponse> logout(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.badRequest().body(new AuthResponse(null, null, "Invalid or missing token"));
+        }
+        String token = authHeader.substring("Bearer ".length());
+        authService.logout(token);
         return ResponseEntity.ok(new AuthResponse(null, null, "Logout successful"));
     }
 

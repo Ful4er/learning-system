@@ -8,7 +8,7 @@ import org.webproject.userservice.model.User;
 public interface AuthService {
     AuthResponse login(LoginRequest request);
     AuthResponse register(RegisterRequest request);
-    void logout();
+    void logout(String token);
     User getCurrentUser();
     AuthResponse refreshToken();
 }

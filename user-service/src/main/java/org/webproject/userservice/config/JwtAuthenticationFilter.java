@@ -30,7 +30,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Set<String> EXCLUDED_PATHS = Set.of(
             "/api/auth/login",
-            "/api/auth/register"
+            "/api/auth/register",
+            "/api/auth/logout"
     );
 
     @Override

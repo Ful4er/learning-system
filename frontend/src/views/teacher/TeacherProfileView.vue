@@ -55,7 +55,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onActivated } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../../api';
 import NavBar from '../../components/NavBar.vue';
@@ -73,7 +73,9 @@ const studentCount = ref(0);
 const examCount = ref(0);
 
 const initials = computed(() => {
-  return user.value.firstName?.charAt(0) + ' ' + user.value.lastName?.charAt(0);
+  const first = user.value.firstName?.charAt(0) || '';
+  const last = user.value.lastName?.charAt(0) || '';
+  return (first + last).toUpperCase() || '?';
 });
 
 async function fetchProfile() {
@@ -85,18 +87,28 @@ async function fetchProfile() {
     }
 
     const userRes = await api.users.me();
-    user.value = userRes.data;
+    if (userRes.data) {
+      user.value = userRes.data;
+    }
 
     const examsRes = await api.teacherExams.list();
     examCount.value = examsRes.data?.length || 0;
 
     const studentMap = new Set();
-    for (const exam of examsRes.data) {
-      try {
-        const assignmentsRes = await api.teacherExams.assignments(exam.id);
-        assignmentsRes.data.forEach(a => studentMap.add(a.studentId));
-      } catch (error) {
-        // Skip if can't fetch assignments
+    if (examsRes.data && Array.isArray(examsRes.data)) {
+      for (const exam of examsRes.data) {
+        try {
+          const assignmentsRes = await api.teacherExams.assignments(exam.id);
+          if (assignmentsRes.data && Array.isArray(assignmentsRes.data)) {
+            assignmentsRes.data.forEach(a => {
+              if (a.studentId) {
+                studentMap.add(a.studentId);
+              }
+            });
+          }
+        } catch (error) {
+          console.warn(`Failed to fetch assignments for exam ${exam.id}:`, error);
+        }
       }
     }
     studentCount.value = studentMap.size;
@@ -109,6 +121,7 @@ async function fetchProfile() {
 }
 
 onMounted(fetchProfile);
+onActivated(fetchProfile); // Перезагружаем данные при активации компонента (включая обновление страницы)
 
 function logout() {
   localStorage.removeItem('token');

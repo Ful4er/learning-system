@@ -118,7 +118,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onActivated, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import api from '../../api';
 import NavBar from '../../components/NavBar.vue';
@@ -320,6 +320,7 @@ async function initialize() {
 }
 
 onMounted(initialize);
+onActivated(initialize);
 </script>
 
 <style scoped>

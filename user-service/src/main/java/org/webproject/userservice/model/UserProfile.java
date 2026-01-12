@@ -1,5 +1,6 @@
 package org.webproject.userservice.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -27,5 +28,6 @@ public class UserProfile {
     private String phoneNumber;
 
     @Column(name = "date_of_birth")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDate dateOfBirth;
 }

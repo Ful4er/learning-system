@@ -6,23 +6,47 @@ spring:
     name: user-service
   datasource:
     url: ${MYSQL_URL}
-    username: ${MYSQL_USERNAME}
-    password: ${MYSQL_PASSWORD}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:password}
   jpa:
     database-platform: org.hibernate.dialect.MySQLDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: true
   flyway:
     enabled: true
     baseline-on-migrate: true
     table: flyway_schema_history_user
     clean-disabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:learning-redis}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:password}
+      timeout: 10000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+      client-name: user-service
+      database: 0
+  cache:
+    redis:
+      time-to-live: 60000
+      cache-null-values: false
+    custom:
+      ttl:
+        user: 90000
+        user-current: 60000
+        jwt-validation: 300000
+        jwt-blacklist: 86400000
 
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_SERVER_URL}
+      defaultZone: ${EUREKA_SERVER_URL:http://eureka-server:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
     initial-instance-info-replication-interval-seconds: 10
@@ -36,4 +60,4 @@ eureka:
     lease-expiration-duration-in-seconds: 15
 jwt:
   expiration: 86400000
-  secret: ${JWT_SECRET}
+  secret: ${JWT_SECRET:dGhpcy1pcy1hLXN1cGVyLXNlY3VyZS1zZWNyZXQta2V5LWZvci1oczM4NC1hbGdvcml0aG0tdGhhdC1pcy1sb25nLWVub3VnaC0xMjM=}

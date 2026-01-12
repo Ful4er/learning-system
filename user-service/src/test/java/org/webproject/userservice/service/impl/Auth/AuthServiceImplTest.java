@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.webproject.userservice.config.JwtTokenCacheService;
 import org.webproject.userservice.dto.request.LoginRequest;
 import org.webproject.userservice.dto.request.RegisterRequest;
 import org.webproject.userservice.dto.response.AuthResponse;
@@ -24,6 +25,7 @@ import org.webproject.userservice.util.JwtTokenUtil;
 import org.webproject.userservice.util.Role;
 
 import java.time.LocalDateTime;
+import java.util.Date;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -36,7 +38,9 @@ class AuthServiceImplTest {
     @Mock
     private AuthenticationManager authenticationManager;
 
-    // Используем Spy с тестовой реализацией
+    @Mock
+    private JwtTokenCacheService jwtTokenCacheService;
+
     @Spy
     private JwtTokenUtil jwtTokenUtil = new TestJwtTokenUtil();
 
@@ -160,7 +164,61 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void logout_Success() {
+    void logout_Success_AddsTokenToBlacklist() {
+        String token = "test-jwt-token";
+        String tokenHash = "hashed-token";
+        Date expirationDate = new Date(System.currentTimeMillis() + 3600000L); // 1 час в будущем
+
+        when(jwtTokenUtil.extractExpiration(token)).thenReturn(expirationDate);
+        when(jwtTokenCacheService.hashToken(token)).thenReturn(tokenHash);
+
+        authService.logout(token);
+
+        verify(jwtTokenCacheService).hashToken(token);
+        verify(jwtTokenCacheService).addToBlacklist(eq(tokenHash), anyLong());
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
+    void logout_WithValidToken_CalculatesTTLCorrectly() {
+        String token = "test-jwt-token";
+        String tokenHash = "hashed-token";
+        // Токен истекает через 5 часов
+        Date expirationDate = new Date(System.currentTimeMillis() + (5 * 60 * 60 * 1000L));
+
+        when(jwtTokenUtil.extractExpiration(token)).thenReturn(expirationDate);
+        when(jwtTokenCacheService.hashToken(token)).thenReturn(tokenHash);
+
+        authService.logout(token);
+
+        // TTL должен быть примерно 5 часов в секундах (с небольшой погрешностью)
+        // 5 часов = 5 * 3600 = 18000 с
+        verify(jwtTokenCacheService).addToBlacklist(eq(tokenHash), longThat(ttl -> (ttl >= 4 * 3600L && ttl <= 6 * 3600L) || (ttl >= 4 * 3600 * 1000L && ttl <= 6 * 3600 * 1000L)));
+
+    }
+
+    @Test
+    void logout_WithNearExpiredToken_EnforceMinimumTTL() {
+        String token = "test-jwt-token";
+        String tokenHash = "hashed-token";
+        // Токен истекает через 30 минут
+        Date expirationDate = new Date(System.currentTimeMillis() + (30 * 60 * 1000L));
+
+        when(jwtTokenUtil.extractExpiration(token)).thenReturn(expirationDate);
+        when(jwtTokenCacheService.hashToken(token)).thenReturn(tokenHash);
+
+        authService.logout(token);
+
+        // TTL должен быть примерно 30 минут в секундах (30 * 60 = 1800 с)
+        verify(jwtTokenCacheService).addToBlacklist(eq(tokenHash), longThat(ttl -> (ttl >= 1700L && ttl <= 1900L) || (ttl >= 1700000L && ttl <= 1900000L)));
+    }
+
+    @Test
+    void logout_ClearsSecurityContext() {
+        String token = "test-jwt-token";
+        String tokenHash = "hashed-token";
+        Date expirationDate = new Date(System.currentTimeMillis() + 3600000L);
+
         UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                 testUser, null, testUser.getAuthorities()
         );
@@ -168,9 +226,31 @@ class AuthServiceImplTest {
         context.setAuthentication(authToken);
         SecurityContextHolder.setContext(context);
 
-        authService.logout();
+        assertNotNull(SecurityContextHolder.getContext().getAuthentication());
+
+        when(jwtTokenUtil.extractExpiration(token)).thenReturn(expirationDate);
+        when(jwtTokenCacheService.hashToken(token)).thenReturn(tokenHash);
+
+        authService.logout(token);
 
         assertNull(SecurityContextHolder.getContext().getAuthentication());
+    }
+
+    @Test
+    void logout_CallsRedisBlacklist() {
+        String token = "test-jwt-token";
+        String tokenHash = "hashed-token";
+        Date expirationDate = new Date(System.currentTimeMillis() + 3600000L);
+
+        when(jwtTokenUtil.extractExpiration(token)).thenReturn(expirationDate);
+        when(jwtTokenCacheService.hashToken(token)).thenReturn(tokenHash);
+
+        authService.logout(token);
+
+        // Проверяем что Redis был использован
+        // TTL должен быть примерно 1 час в секундах (~3600 с)
+        verify(jwtTokenCacheService).hashToken(token);
+        verify(jwtTokenCacheService).addToBlacklist(eq(tokenHash), longThat(ttl -> (ttl >= 3500L && ttl <= 3700L) || (ttl >= 3500000L && ttl <= 3700000L)));
     }
 
     @Test

@@ -114,12 +114,16 @@ router.beforeEach(async (to, from, next) => {
                     localStorage.setItem('userRole', role);
                 }
             } catch (e) {
-                console.warn('Could not determine user role during navigation, redirecting to auth.', e?.message || e);
-                localStorage.removeItem('token');
-                localStorage.removeItem('userId');
-                localStorage.removeItem('userRole');
-                delete axios.defaults.headers.common['Authorization'];
-                return next({ path: '/auth', query: { redirect: to.fullPath } });
+                if (e.response?.status === 401) {
+                    console.warn('Unauthorized during navigation, redirecting to auth.', e?.message || e);
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('userId');
+                    localStorage.removeItem('userRole');
+                    delete axios.defaults.headers.common['Authorization'];
+                    return next({ path: '/auth', query: { redirect: to.fullPath } });
+                } else {
+                    console.warn('Could not determine user role during navigation (non-401 error), continuing:', e?.message || e);
+                }
             }
         }
 
@@ -165,18 +169,22 @@ async function initAuth() {
             localStorage.setItem('userRole', resp.data.role);
         }
     } catch (e) {
-        console.warn('Initial auth check failed, clearing session:', e?.message || e);
-        localStorage.removeItem('token');
-        localStorage.removeItem('userId');
-        localStorage.removeItem('userRole');
-        delete axios.defaults.headers.common['Authorization'];
+        if (e.response?.status === 401) {
+            console.warn('Unauthorized, clearing session:', e?.message || e);
+            localStorage.removeItem('token');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userRole');
+            delete axios.defaults.headers.common['Authorization'];
 
-        if (window.location.pathname !== '/auth') {
-            try {
-                await router.push('/auth');
-            } catch (err) {
-                window.location.href = '/auth';
+            if (window.location.pathname !== '/auth') {
+                try {
+                    await router.push('/auth');
+                } catch (err) {
+                    window.location.href = '/auth';
+                }
             }
+        } else {
+            console.warn('Initial auth check failed (non-401 error), keeping session:', e?.message || e);
         }
     }
 }

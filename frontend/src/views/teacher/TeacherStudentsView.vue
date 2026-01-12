@@ -351,13 +351,6 @@ function toggleNotifications() {
   console.log('Toggle notifications')
 }
 
-function logout() {
-  localStorage.removeItem('token')
-  localStorage.removeItem('userId')
-  localStorage.removeItem('userRole')
-  router.push('/auth')
-}
-
 function goToExams() {
   router.push('/teacher/exams')
 }

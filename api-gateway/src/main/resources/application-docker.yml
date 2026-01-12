@@ -39,7 +39,7 @@ management:
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_SERVER_URL}
+      defaultZone: ${EUREKA_SERVER_URL:http://eureka-server:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
     initial-instance-info-replication-interval-seconds: 10

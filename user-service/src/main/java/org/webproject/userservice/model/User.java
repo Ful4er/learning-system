@@ -1,6 +1,8 @@
 package org.webproject.userservice.model;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import lombok.Data;
@@ -18,6 +20,7 @@ import java.util.Collections;
 @Entity
 @Table(name = "users")
 @Data
+@JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, property = "@class")
 public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -42,9 +45,11 @@ public class User implements UserDetails {
     private Role role;
 
     @Column(name = "created_at", nullable = false, updatable = false)
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt = LocalDateTime.now();
 
     @Column(name = "last_login")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime lastLogin = LocalDateTime.now();
 
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL)

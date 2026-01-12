@@ -8,6 +8,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
+import org.webproject.userservice.config.JwtTokenCacheService;
 import org.webproject.userservice.dto.request.LoginRequest;
 import org.webproject.userservice.dto.request.RegisterRequest;
 import org.webproject.userservice.dto.response.AuthResponse;
@@ -21,6 +22,7 @@ import org.webproject.userservice.util.JwtTokenUtil;
 import org.webproject.userservice.util.Role;
 
 import java.util.Arrays;
+import java.util.Date;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +32,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserService userService;
     private final JwtTokenUtil jwtTokenUtil;
     private final AuthenticationManager authenticationManager;
+    private final JwtTokenCacheService jwtTokenCacheService;
 
     @Transactional
     @Override
@@ -69,8 +72,18 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void logout() {
-        SecurityContextHolder.clearContext();
+    public void logout(String token) {
+        try {
+            String tokenHash = jwtTokenCacheService.hashToken(token);
+            Date expiration = jwtTokenUtil.extractExpiration(token);
+            long millisUntilExpiration = expiration.getTime() - System.currentTimeMillis();
+            long ttlSeconds = Math.max(1L, millisUntilExpiration / 1000L);
+            jwtTokenCacheService.addToBlacklist(tokenHash, ttlSeconds);
+        } catch (Exception e) {
+            log.warn("Failed to add token to blacklist during logout: {}", e.getMessage());
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
     }
 
     @Override
@@ -92,8 +105,8 @@ public class AuthServiceImpl implements AuthService {
             return null;
         }
 
-        if (!authentication.isAuthenticated() || authentication.getPrincipal().equals("anonymousUser")) {
-            log.warn("Unauthenticated or anonymous principal");
+        if (!authentication.isAuthenticated()) {
+            log.warn("User is not authenticated");
             return null;
         }
 
@@ -101,10 +114,25 @@ public class AuthServiceImpl implements AuthService {
 
         if (principal instanceof User user) {
             return createSafeUserCopy(user);
-        } else {
-            log.error("Principal is not instance of User: {}", principal.getClass());
-            return null;
         }
+
+        if (principal instanceof String username) {
+            if ("anonymousUser".equals(username)) {
+                log.warn("Anonymous user access");
+                return null;
+            }
+            try {
+                return userService.findByEmail(username)
+                        .map(this::createSafeUserCopy)
+                        .orElse(null);
+            } catch (Exception e) {
+                log.error("Error fetching user by username: {}", username, e);
+                return null;
+            }
+        }
+
+        log.error("Unsupported principal type: {}", principal.getClass());
+        return null;
     }
 
 
