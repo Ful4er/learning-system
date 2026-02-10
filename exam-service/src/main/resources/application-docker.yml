@@ -61,3 +61,7 @@ eureka:
 jwt:
   expiration: 86400000
   secret: ${JWT_SECRET:dGhpcy1pcy1hLXN1cGVyLXNlY3VyZS1zZWNyZXQta2V5LWZvci1oczM4NC1hbGdvcml0aG0tdGhhdC1pcy1sb25nLWVub3VnaC0xMjM=}
+
+api:
+  user-service:
+    url: ${API_USER_SERVICE_URL:http://user-service:8081}

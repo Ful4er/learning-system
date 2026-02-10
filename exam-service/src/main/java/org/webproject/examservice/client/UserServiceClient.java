@@ -3,9 +3,11 @@ package org.webproject.examservice.client;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import reactor.core.publisher.Mono;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.webproject.examservice.dto.response.UserDto;
@@ -18,26 +20,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class UserServiceClient {
 
-    private final RestTemplate restTemplate;
+    private final WebClient webClient;
     private final ObjectMapper objectMapper;
-
-    @Value("${app.services.user-service.url:http://api-gateway:8080}")
-    private String userServiceUrl;
 
     public UserDto getUserById(Long userId) {
         try {
-            String url = userServiceUrl + "/api/users/" + userId;
+            String url = "/api/users/" + userId;
             log.info("Requesting user by ID: {}", url);
 
-            HttpHeaders headers = buildAuthHeaders();
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> rawResponse = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-            if (!rawResponse.getStatusCode().is2xxSuccessful() || rawResponse.getBody() == null) {
-                log.warn("User service responded with status {} for id {}", rawResponse.getStatusCode(), userId);
+            Mono<String> responseMono = webClient.get()
+                    .uri(url)
+                    .headers(headers -> headers.addAll(buildAuthHeaders()))
+                    .retrieve()
+                    .bodyToMono(String.class);
+
+            String rawResponse = responseMono.block();
+            if (rawResponse == null) {
+                log.warn("Empty response from user service for id {}", userId);
                 return createFallbackUser(userId);
             }
 
-            JsonNode userNode = objectMapper.readTree(rawResponse.getBody());
+            JsonNode userNode = objectMapper.readTree(rawResponse);
             if (userNode == null || userNode.isNull()) {
                 log.warn("Empty user payload received for id {}", userId);
                 return createFallbackUser(userId);
@@ -52,11 +55,15 @@ public class UserServiceClient {
 
             log.info("Resolved user {} {} via user-service", userDto.getFirstName(), userDto.getLastName());
             return userDto;
+        } catch (WebClientResponseException e) {
+            log.warn("User service responded with status {} for id {}", e.getStatusCode(), userId);
+            return createFallbackUser(userId);
         } catch (Exception e) {
             log.error("Failed to fetch user by ID {}: {}", userId, e.getMessage(), e);
             return createFallbackUser(userId);
         }
     }
+    
     private UserDto createFallbackUser(Long userId) {
         UserDto fallback = new UserDto();
         fallback.setId(userId);
@@ -69,28 +76,29 @@ public class UserServiceClient {
 
     public UserDto getUserByEmail(String email) {
         try {
-                    String sanitizedEmail = (email == null) ? null : email.replaceAll("\\p{C}", "").trim();
-                    String url = org.springframework.web.util.UriComponentsBuilder
-                            .fromHttpUrl(userServiceUrl + "/api/users/search")
+            String sanitizedEmail = (email == null) ? null : email.replaceAll("\\p{C}", "").trim();
+
+            log.info("Searching user by email: {}", sanitizedEmail);
+
+            Mono<String> responseMono = webClient.get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/api/users/search")
                             .queryParam("email", sanitizedEmail)
-                            .build()
-                            .toUriString();
+                            .build())
+                    .headers(headers -> headers.addAll(buildAuthHeaders()))
+                    .retrieve()
+                    .bodyToMono(String.class);
 
-            log.info("Searching user by email: {}", url);
+            String rawBody = responseMono.block();
+            log.info("Raw search response: {}", rawBody);
 
-            HttpHeaders headers = buildAuthHeaders();
-            HttpEntity<Void> entity = new HttpEntity<>(headers);
-            ResponseEntity<String> rawResponse = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-            log.info("Raw search response: {}", rawResponse.getBody());
-
-            String rawBody = rawResponse.getBody();
             if (rawBody == null) {
                 log.warn("Empty response body from user-service search for email: {}", sanitizedEmail);
                 return null;
             }
             JsonNode jsonArray = objectMapper.readTree(rawBody);
 
-            if (jsonArray.isArray() && jsonArray.size() > 0) {
+            if (jsonArray.isArray() && !jsonArray.isEmpty()) {
                 JsonNode firstUser = jsonArray.get(0);
 
                 UserDto userDto = new UserDto();
@@ -113,17 +121,21 @@ public class UserServiceClient {
 
             if (sanitizedEmail != null && sanitizedEmail.contains("@")) {
                 String local = sanitizedEmail.substring(0, sanitizedEmail.indexOf('@'));
-                String fallbackUrl = org.springframework.web.util.UriComponentsBuilder
-                        .fromHttpUrl(userServiceUrl + "/api/users/search")
-                        .queryParam("email", local)
-                        .build()
-                        .toUriString();
-                log.info("Fallback search URL: {}", fallbackUrl);
-                ResponseEntity<String> fallbackResponse = restTemplate.exchange(fallbackUrl, HttpMethod.GET, entity, String.class);
-                String fallbackBody = fallbackResponse.getBody();
+                log.info("Fallback search with local part: {}", local);
+                
+                Mono<String> fallbackResponseMono = webClient.get()
+                        .uri(uriBuilder -> uriBuilder
+                                .path("/api/users/search")
+                                .queryParam("email", local)
+                                .build())
+                        .headers(headers -> headers.addAll(buildAuthHeaders()))
+                        .retrieve()
+                        .bodyToMono(String.class);
+                
+                String fallbackBody = fallbackResponseMono.block();
                 if (fallbackBody != null) {
                     JsonNode fallbackJson = objectMapper.readTree(fallbackBody);
-                    if (fallbackJson.isArray() && fallbackJson.size() > 0) {
+                    if (fallbackJson.isArray() && !fallbackJson.isEmpty()) {
                         JsonNode firstUser = fallbackJson.get(0);
                         UserDto userDto = new UserDto();
                         userDto.setId(firstUser.has("id") ? firstUser.get("id").asLong() : null);
