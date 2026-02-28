@@ -33,18 +33,22 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
-  redis:
-    image: redis:7-alpine
-    container_name: learning-redis
+
+  # Redis Stack (Redis + RedisInsight в одном контейнере)
+  redis-stack:
+    image: redis/redis-stack:latest
+    container_name: learning-redis-stack
     ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-password}
+      - "6379:6379"   # Redis порт
+      - "8001:8001"   # RedisInsight порт (встроенный)
+    environment:
+      - REDIS_ARGS=--requirepass ${REDIS_PASSWORD:-password} --appendonly yes
     volumes:
       - redis_data:/data
     networks:
       - learning-network
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "password", "ping" ]
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-password}", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -63,7 +67,6 @@ services:
         condition: service_healthy
     environment:
       - VITE_API_BASE_URL=/api
-
 
   api-gateway:
     build: ./api-gateway
@@ -99,8 +102,8 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
       - EUREKA_SERVER_URL=${EUREKA_SERVER_URL:-http://eureka-server:8761/eureka/}
       - JWT_SECRET=${JWT_SECRET:-dGhpcy1pcy1hLXN1cGVyLXNlY3VyZS1zZWNyZXQta2V5LWZvci1oczM4NC1hbGdvcml0aG0tdGhhdC1pcy1sb25nLWVub3VnaC0xMjM=}
-      - REDIS_HOST=${REDIS_HOST:-learning-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_HOST=redis-stack
+      - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-password}
       - SPRING_PROFILES_ACTIVE=docker
     networks:
@@ -109,7 +112,7 @@ services:
     depends_on:
       mysql-db:
         condition: service_healthy
-      redis:
+      redis-stack:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
@@ -125,8 +128,8 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
       - EUREKA_SERVER_URL=${EUREKA_SERVER_URL:-http://eureka-server:8761/eureka/}
       - JWT_SECRET=${JWT_SECRET:-dGhpcy1pcy1hLXN1cGVyLXNlY3VyZS1zZWNyZXQta2V5LWZvci1oczM4NC1hbGdvcml0aG0tdGhhdC1pcy1sb25nLWVub3VnaC0xMjM=}
-      - REDIS_HOST=${REDIS_HOST:-learning-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_HOST=redis-stack
+      - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-password}
       - SPRING_PROFILES_ACTIVE=docker
     networks:
@@ -135,7 +138,7 @@ services:
     depends_on:
       mysql-db:
         condition: service_healthy
-      redis:
+      redis-stack:
         condition: service_healthy
       eureka-server:
         condition: service_healthy

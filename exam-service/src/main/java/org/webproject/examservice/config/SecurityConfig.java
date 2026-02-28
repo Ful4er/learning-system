@@ -12,6 +12,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.webproject.examservice.security.RemoteJwtTokenValidator;
 
 import javax.crypto.SecretKey;
 
@@ -21,14 +22,20 @@ import javax.crypto.SecretKey;
 public class SecurityConfig {
 
     private final SecretKey secretKey;
+    private final RemoteJwtTokenValidator remoteJwtTokenValidator;
 
     @Bean
     public JwtDecoder jwtDecoder() {
-        return NimbusJwtDecoder.withSecretKey(secretKey).build();
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey).build();
+        decoder.setJwtValidator(remoteJwtTokenValidator);
+        return decoder;
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationConverter jwtAuthenticationConverter
+    ) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(sm -> sm
@@ -43,7 +50,7 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt
                                 .decoder(jwtDecoder())
-                                .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                                .jwtAuthenticationConverter(jwtAuthenticationConverter)
                         )
                 );
 
@@ -52,12 +59,13 @@ public class SecurityConfig {
 
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
+
         JwtGrantedAuthoritiesConverter grantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
         grantedAuthoritiesConverter.setAuthoritiesClaimName("role");
         grantedAuthoritiesConverter.setAuthorityPrefix("ROLE_");
 
-        JwtAuthenticationConverter jwtAuthenticationConverter = new JwtAuthenticationConverter();
-        jwtAuthenticationConverter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
-        return jwtAuthenticationConverter;
+        JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(grantedAuthoritiesConverter);
+        return converter;
     }
 }

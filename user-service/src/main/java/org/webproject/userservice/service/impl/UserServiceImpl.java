@@ -9,6 +9,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.webproject.userservice.dto.cache.UserCacheDto;
 import org.webproject.userservice.dto.request.RegisterRequest;
 import org.webproject.userservice.exception.EmailAlreadyExistsException;
 import org.webproject.userservice.model.User;
@@ -23,7 +24,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import static org.webproject.userservice.util.Role.*;
+import static org.webproject.userservice.util.Role.STUDENT;
 
 @Service
 @Slf4j
@@ -51,7 +52,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Cacheable(value = "users", key="#userId")
+    @Cacheable(value = "users", key = "#userId")
     @Transactional(readOnly = true)
     public Optional<User> getUserById(Long userId) {
         log.debug("Fetching user from database: {}", userId);
@@ -102,6 +103,7 @@ public class UserServiceImpl implements UserService {
             log.debug("Updated last login for user: {}, evicting cache", userId);
         });
     }
+
     @Override
     public User createUserFromRegistration(RegisterRequest request, Role role) {
         if (existsByEmail(request.getEmail())) {
@@ -117,6 +119,7 @@ public class UserServiceImpl implements UserService {
 
         return createUser(user, role);
     }
+
     @Override
     public List<User> searchStudentsByEmail(String emailPart) {
         if (emailPart == null) {
@@ -131,5 +134,17 @@ public class UserServiceImpl implements UserService {
     @Override
     public List<User> searchStudentsByName(String namePart) {
         return userRepository.findTop10ByFirstNameIgnoreCaseContainingOrLastNameIgnoreCaseContainingAndRole(namePart, namePart, STUDENT);
+    }
+    @Override
+    @Cacheable(value = "users-dto", key = "#userId")
+    public UserCacheDto getUserDtoById(Long userId) {
+        log.debug("Fetching user DTO from database: {}", userId);
+        return userRepository.findById(userId)
+                .map(UserCacheDto::fromUser)
+                .orElse(null);
+    }
+    @Override
+    public List<User> getUsersByIds(List<Long> ids){
+        return userRepository.findUsersByIds(ids);
     }
 }

@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.webproject.userservice.dto.cache.UserCacheDto;
 import org.webproject.userservice.dto.response.UserResponse;
 import org.webproject.userservice.dto.response.UserShortResponse;
 import org.webproject.userservice.model.User;
@@ -16,6 +17,8 @@ import org.webproject.userservice.service.UserService;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 import static java.net.URLDecoder.decode;
 
@@ -55,21 +58,33 @@ public class UserController {
     @GetMapping("/{userId}")
     public ResponseEntity<UserResponse> getUserById(@PathVariable Long userId) {
         try {
-            return userService.getUserById(userId)
-                    .map(UserResponse::new)
-                    .map(ResponseEntity::ok)
-                    .orElse(ResponseEntity.notFound().build());
+            Optional<User> userOpt = userService.getUserById(userId);
+            return userOpt.map(user -> ResponseEntity.ok(new UserResponse(user))).orElseGet(() -> ResponseEntity.notFound().build());
         } catch (ClassCastException e) {
-            log.warn("Cache deserialization error for user {}: {}. Clearing cache and retrying.", userId, e.getMessage());
+            log.warn("Cache deserialization error for user {}: {}. Clearing cache and retrying with DTO.",
+                    userId, e.getMessage());
+
             var cache = cacheManager.getCache("users");
             if (cache != null) {
                 cache.evict(userId);
             }
-            return userService.getUserById(userId)
-                    .map(UserResponse::new)
-                    .map(ResponseEntity::ok)
-                    .orElse(ResponseEntity.notFound().build());
+
+            UserCacheDto cachedDto = userService.getUserDtoById(userId);
+            if (cachedDto != null) {
+                return ResponseEntity.ok(new UserResponse(cachedDto.toUser()));
+            }
+
+            return ResponseEntity.notFound().build();
         }
+    }
+
+    @GetMapping("/{userId}/dto")
+    public ResponseEntity<UserCacheDto> getUserDtoById(@PathVariable Long userId) {
+        UserCacheDto userDto = userService.getUserDtoById(userId);
+        if (userDto != null) {
+            return ResponseEntity.ok(userDto);
+        }
+        return ResponseEntity.notFound().build();
     }
 
     @PreAuthorize("hasRole('TEACHER') or hasRole('ADMIN')")
@@ -105,4 +120,49 @@ public class UserController {
 
         return ResponseEntity.ok(result);
     }
+
+    @PostMapping("/cache/clear/{userId}")
+    public ResponseEntity<String> clearUserCache(@PathVariable Long userId) {
+        var cache = cacheManager.getCache("users");
+        if (cache != null) {
+            cache.evict(userId);
+            log.info("Manually cleared cache for user: {}", userId);
+            return ResponseEntity.ok("Cache cleared for user: " + userId);
+        }
+        return ResponseEntity.notFound().build();
+    }
+
+    @PostMapping("/cache/clear-all")
+    public ResponseEntity<String> clearAllCache() {
+        cacheManager.getCacheNames()
+                .forEach(cacheName -> {
+                    Objects.requireNonNull(cacheManager.getCache(cacheName)).clear();
+                    log.info("Cleared cache: {}", cacheName);
+                });
+        return ResponseEntity.ok("All caches cleared");
+    }
+
+    @GetMapping("/batch")
+    public ResponseEntity<List<UserResponse>> getUsersByIds(
+            @RequestParam("ids") List<Long> ids) {
+
+        log.info("Getting batch users by ids: {} by principal='{}'", ids, authPrincipal());
+
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.ok(Collections.emptyList());
+        }
+        if (ids.size() > 100) {
+            log.warn("Too many ids requested: {}, truncating to 100", ids.size());
+            ids = ids.subList(0, 100);
+        }
+
+        List<User> users = userService.getUsersByIds(ids);
+        List<UserResponse> response = users.stream()
+                .map(UserResponse::new)
+                .toList();
+
+        log.info("Returning {} users for batch request", response.size());
+        return ResponseEntity.ok(response);
+    }
+
 }

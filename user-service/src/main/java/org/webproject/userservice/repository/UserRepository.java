@@ -17,4 +17,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByIdWithProfile(@Param("userId") Long userId);
     List<User> findTop10ByEmailIgnoreCaseContainingAndRole(String email, Role role);
     List<User> findTop10ByFirstNameIgnoreCaseContainingOrLastNameIgnoreCaseContainingAndRole(String firstName, String lastName, Role role);
+    @Query("SELECT u FROM User u WHERE u.id IN :ids")
+    List<User> findUsersByIds(@Param("ids") List<Long> ids);
 }

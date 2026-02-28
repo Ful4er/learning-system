@@ -1,6 +1,8 @@
 package org.webproject.examservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.webproject.examservice.dto.request.StartExamAttemptRequest;
@@ -47,6 +49,7 @@ public class StudentExamServiceImpl implements StudentExamService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "exam-list", key = "'student:' + #studentId")
     public List<ExamResponse> getAssignedExamsForStudent(Long studentId) {
         List<ExamAssignment> assignments = examAssignmentRepository.findAllByStudentId(studentId);
         List<Long> examIds = assignments.stream().map(ExamAssignment::getExamId).collect(Collectors.toList());
@@ -58,6 +61,7 @@ public class StudentExamServiceImpl implements StudentExamService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "exam-details", key = "#examId")
     public ExamResponse getExamDetails(Long examId, Long studentId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -66,6 +70,7 @@ public class StudentExamServiceImpl implements StudentExamService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "question-list", key = "#examId")
     public List<QuestionResponse> getExamQuestions(Long examId, Long studentId) {
         return questionRepository.findAllByExamIdOrderByIdAsc(examId).stream()
                 .map(this::toQuestionResponse)
@@ -110,6 +115,7 @@ public class StudentExamServiceImpl implements StudentExamService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"exam-list", "attempts"}, key = "'student:' + #studentId")
     public ExamAttemptResponse startExamAttempt(Long studentId, StartExamAttemptRequest request) {
         Exam exam = examRepository.findById(request.getExamId())
                 .orElseThrow(() -> new ExamNotFoundException(request.getExamId()));
@@ -150,6 +156,7 @@ public class StudentExamServiceImpl implements StudentExamService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"attempt-details", "attempts", "exam-list"}, allEntries = true)
     public ExamAttemptResponse finishExamAttempt(Long studentId, Long attemptId) {
         ExamAttempt attempt = examAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new IllegalArgumentException("Attempt not found"));
@@ -192,6 +199,7 @@ public class StudentExamServiceImpl implements StudentExamService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "attempt-details", key = "#attemptId")
     public ExamAttemptResponse getAttemptDetails(Long studentId, Long attemptId) {
         ExamAttempt attempt = examAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new IllegalArgumentException("Attempt not found"));
@@ -205,6 +213,7 @@ public class StudentExamServiceImpl implements StudentExamService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "attempt-details", key = "#attemptId")
     public void submitAnswer(Long studentId, Long attemptId, SubmitAnswerRequest request) {
         ExamAttempt attempt = examAttemptRepository.findById(attemptId)
                 .orElseThrow(() -> new IllegalArgumentException("Attempt not found"));
@@ -403,5 +412,3 @@ public class StudentExamServiceImpl implements StudentExamService {
         return resp;
     }
 }
-
-

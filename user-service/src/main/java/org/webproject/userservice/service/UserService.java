@@ -1,5 +1,6 @@
 package org.webproject.userservice.service;
 
+import org.webproject.userservice.dto.cache.UserCacheDto;
 import org.webproject.userservice.dto.request.RegisterRequest;
 import org.webproject.userservice.model.User;
 import org.webproject.userservice.util.Role;
@@ -17,4 +18,6 @@ public interface UserService {
     User createUserFromRegistration(RegisterRequest request, Role role);
     List<User> searchStudentsByEmail(String emailPart);
     List<User> searchStudentsByName(String namePart);
+    UserCacheDto getUserDtoById(Long userId);
+    List<User> getUsersByIds(List<Long> ids);
 }

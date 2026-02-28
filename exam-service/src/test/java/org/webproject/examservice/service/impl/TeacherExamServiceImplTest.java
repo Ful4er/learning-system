@@ -1,153 +1,130 @@
 package org.webproject.examservice.service.impl;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.webproject.examservice.dto.request.AddQuestionRequest;
-import org.webproject.examservice.dto.request.CreateExamRequest;
-import org.webproject.examservice.dto.request.UpdateExamRequest;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.webproject.examservice.client.UserServiceClient;
+import org.webproject.examservice.dto.response.ExamAssignmentResponse;
 import org.webproject.examservice.dto.response.ExamResponse;
-import org.webproject.examservice.dto.response.QuestionResponse;
-import org.webproject.examservice.exception.AccessDeniedException;
-import org.webproject.examservice.exception.ExamAlreadyPublishedException;
-import org.webproject.examservice.exception.ExamNotFoundException;
+import org.webproject.examservice.dto.response.UserDto;
 import org.webproject.examservice.model.Exam;
-import org.webproject.examservice.model.Question;
-import org.webproject.examservice.model.QuestionOption;
+import org.webproject.examservice.model.ExamAssignment;
+import org.webproject.examservice.repository.ExamAssignmentRepository;
+import org.webproject.examservice.repository.ExamAttemptRepository;
+import org.webproject.examservice.repository.ExamRepository;
+import org.webproject.examservice.repository.QuestionOptionRepository;
+import org.webproject.examservice.repository.QuestionRepository;
+import org.webproject.examservice.repository.StudentAnswerRepository;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class TeacherExamServiceImplTest {
 
-    @Test
-    public void testExamCreationRequest() {
-        CreateExamRequest request = new CreateExamRequest();
-        request.setTitle("Test Exam");
-        request.setDescription("Test Description");
-        request.setDurationMinutes(60);
-        
-        assertEquals("Test Exam", request.getTitle());
-        assertEquals("Test Description", request.getDescription());
-        assertEquals(60, request.getDurationMinutes());
+    @Mock
+    private ExamRepository examRepository;
+    @Mock
+    private ExamAssignmentRepository examAssignmentRepository;
+    @Mock
+    private QuestionRepository questionRepository;
+    @Mock
+    private QuestionOptionRepository questionOptionRepository;
+    @Mock
+    private ExamAttemptRepository examAttemptRepository;
+    @Mock
+    private StudentAnswerRepository studentAnswerRepository;
+    @Mock
+    private UserServiceClient userServiceClient;
+
+    private TeacherExamServiceImpl service;
+
+    @BeforeEach
+    void setUp() {
+        service = new TeacherExamServiceImpl(
+                examRepository,
+                examAssignmentRepository,
+                questionRepository,
+                questionOptionRepository,
+                examAttemptRepository,
+                studentAnswerRepository,
+                userServiceClient
+        );
     }
 
     @Test
-    public void testExamUpdateRequest() {
-        // Test exam update request validation
-        UpdateExamRequest request = new UpdateExamRequest();
-        request.setTitle("Updated Exam");
-        request.setDescription("Updated Description");
-        
-        assertEquals("Updated Exam", request.getTitle());
-        assertEquals("Updated Description", request.getDescription());
-    }
-
-    @Test
-    public void testQuestionRequest() {
-        AddQuestionRequest request = new AddQuestionRequest();
-        request.setText("What is 2+2?");
-        
-        assertEquals("What is 2+2?", request.getText());
-    }
-
-    @Test
-    public void testExamModel() {
-        // Test exam model properties
+    void publishExam_whenAlreadyPublished_isIdempotent() {
+        Long examId = 10L;
+        Long teacherId = 20L;
         Exam exam = new Exam();
-        exam.setTitle("Test Exam");
-        exam.setDescription("Test Description");
-        exam.setDurationMinutes(60);
-        exam.setStatus(Exam.ExamStatus.DRAFT);
-        
-        assertEquals("Test Exam", exam.getTitle());
-        assertEquals("Test Description", exam.getDescription());
-        assertEquals(60, exam.getDurationMinutes());
-        assertEquals(Exam.ExamStatus.DRAFT, exam.getStatus());
+        exam.setId(examId);
+        exam.setTeacherId(teacherId);
+        exam.setStatus(Exam.ExamStatus.PUBLISHED);
+
+        when(examRepository.findById(examId)).thenReturn(Optional.of(exam));
+        when(questionRepository.findAllByExamIdOrderByIdAsc(examId)).thenReturn(List.of());
+        when(examAssignmentRepository.findAllByExamId(examId)).thenReturn(List.of());
+
+        ExamResponse response = service.publishExam(examId, teacherId);
+
+        assertNotNull(response);
+        assertEquals(examId, response.getId());
+        assertEquals("PUBLISHED", response.getStatus());
+        verify(examRepository, never()).save(any());
     }
 
     @Test
-    public void testQuestionModel() {
-        Question question = new Question();
-        question.setText("Test Question");
-        question.setPoints(10);
-        
-        assertEquals("Test Question", question.getText());
-        assertEquals(10, question.getPoints());
-    }
+    void getExamAssignments_fetchesUsersInBatchOnce() {
+        Long examId = 1L;
+        Long teacherId = 2L;
+        Exam exam = new Exam();
+        exam.setId(examId);
+        exam.setTeacherId(teacherId);
 
-    @Test
-    public void testQuestionOptionModel() {
-        QuestionOption option = new QuestionOption();
-        option.setText("Option A");
-        
-        assertEquals("Option A", option.getText());
-    }
+        ExamAssignment a1 = new ExamAssignment();
+        a1.setId(100L);
+        a1.setExamId(examId);
+        a1.setStudentId(11L);
+        ExamAssignment a2 = new ExamAssignment();
+        a2.setId(200L);
+        a2.setExamId(examId);
+        a2.setStudentId(22L);
 
-    @Test
-    public void testExamResponse() {
-        ExamResponse response = new ExamResponse();
-        response.setTitle("Test Exam");
-        response.setDescription("Test Description");
-        
-        assertEquals("Test Exam", response.getTitle());
-        assertEquals("Test Description", response.getDescription());
-    }
+        UserDto u1 = new UserDto();
+        u1.setId(11L);
+        u1.setFirstName("A");
+        u1.setLastName("B");
+        u1.setEmail("a@b.com");
 
-    @Test
-    public void testQuestionResponse() {
-        QuestionResponse response = new QuestionResponse();
-        response.setText("Test Question");
-        
-        assertEquals("Test Question", response.getText());
-    }
+        UserDto u2 = new UserDto();
+        u2.setId(22L);
+        u2.setFirstName("C");
+        u2.setLastName("D");
+        u2.setEmail("c@d.com");
 
-    @Test
-    public void testExceptionMessages() {
-        ExamNotFoundException notFound = new ExamNotFoundException("Exam not found");
-        assertEquals("Exam not found", notFound.getMessage());
-        
-        AccessDeniedException accessDenied = new AccessDeniedException("Access denied");
-        assertEquals("Access denied", accessDenied.getMessage());
-        
-        ExamAlreadyPublishedException published = new ExamAlreadyPublishedException("Already published");
-        assertEquals("Already published", published.getMessage());
-    }
+        when(examRepository.findById(examId)).thenReturn(Optional.of(exam));
+        when(examAssignmentRepository.findAllByExamId(examId)).thenReturn(List.of(a1, a2));
+        when(userServiceClient.getUsersByIds(eq(List.of(11L, 22L)))).thenReturn(List.of(u1, u2));
+        when(examAttemptRepository.findAllByExamIdAndStudentId(eq(examId), any())).thenReturn(List.of());
 
-    @Test
-    public void testExamStatusEnum() {
-        Exam.ExamStatus[] statuses = Exam.ExamStatus.values();
-        assertTrue(statuses.length > 0);
-        
-        boolean foundDraft = false;
-        boolean foundPublished = false;
-        
-        for (Exam.ExamStatus status : statuses) {
-            if (status == Exam.ExamStatus.DRAFT) {
-                foundDraft = true;
-            }
-            if (status == Exam.ExamStatus.PUBLISHED) {
-                foundPublished = true;
-            }
-        }
-        
-        assertTrue(foundDraft);
-        assertTrue(foundPublished);
-    }
+        List<ExamAssignmentResponse> result = service.getExamAssignments(examId, teacherId);
 
-    @Test
-    public void testListOperations() {
-        List<Question> questions = new ArrayList<>();
-        Question question1 = new Question();
-        question1.setText("Question 1");
-        Question question2 = new Question();
-        question2.setText("Question 2");
-        
-        questions.add(question1);
-        questions.add(question2);
-        
-        assertEquals(2, questions.size());
-        assertEquals("Question 1", questions.get(0).getText());
-        assertEquals("Question 2", questions.get(1).getText());
+        assertEquals(2, result.size());
+        assertEquals("A B", result.get(0).getStudentName());
+        assertEquals("C D", result.get(1).getStudentName());
+        verify(userServiceClient, times(1)).getUsersByIds(eq(List.of(11L, 22L)));
+        verify(userServiceClient, never()).getUserById(any());
     }
 }

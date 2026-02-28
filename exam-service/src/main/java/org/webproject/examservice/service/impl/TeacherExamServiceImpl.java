@@ -2,6 +2,9 @@ package org.webproject.examservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.webproject.examservice.client.UserServiceClient;
@@ -28,7 +31,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -48,6 +53,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "exam-list", key = "'teacher:' + #request.teacherId")
     public ExamResponse createExam(CreateExamRequest request) {
         Exam exam = new Exam();
         exam.setTitle(request.getTitle());
@@ -61,6 +67,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "exam-details", key = "#examId")
     public ExamResponse getExamById(Long examId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -69,6 +76,10 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "exam-details", key = "#examId"),
+            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId")
+    })
     public ExamResponse updateExam(Long examId, Long teacherId, UpdateExamRequest request) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -86,6 +97,11 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "exam-details", key = "#examId"),
+            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId"),
+            @CacheEvict(value = "question-list", allEntries = true)
+    })
     public void deleteExam(Long examId, Long teacherId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -96,13 +112,17 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "exam-details", key = "#examId"),
+            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId")
+    })
     public ExamResponse publishExam(Long examId, Long teacherId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
         ensureOwner(exam, teacherId);
 
         if (exam.getStatus() == Exam.ExamStatus.PUBLISHED) {
-            throw new ExamAlreadyPublishedException(examId);
+            return toExamResponse(exam);
         }
 
         exam.setStatus(Exam.ExamStatus.PUBLISHED);
@@ -112,6 +132,10 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "exam-details", key = "#examId"),
+            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId")
+    })
     public ExamResponse archiveExam(Long examId, Long teacherId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -124,9 +148,11 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "exam-list", key = "'teacher:' + #teacherId")
     public List<ExamResponse> getExamsByTeacher(Long teacherId) {
         return examRepository.findAllByTeacherId(teacherId).stream()
                 .map(this::toExamResponse)
+                .peek(System.out::println)
                 .collect(Collectors.toList());
     }
 
@@ -137,9 +163,34 @@ public class TeacherExamServiceImpl implements TeacherExamService {
                 .orElseThrow(() -> new ExamNotFoundException(examId));
         ensureOwner(exam, teacherId);
 
-        return examAssignmentRepository.findAllByExamId(examId).stream()
-                .map(this::toExamAssignmentResponse)
-                .collect(Collectors.toList());
+        List<ExamAssignment> assignments = examAssignmentRepository.findAllByExamId(examId);
+        if (assignments.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> studentIds = assignments.stream()
+                .map(ExamAssignment::getStudentId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<Long, UserDto> usersById;
+        if (studentIds.isEmpty()) {
+            usersById = new HashMap<>();
+        } else {
+            usersById = userServiceClient.getUsersByIds(studentIds).stream()
+                    .filter(Objects::nonNull)
+                    .filter(u -> u.getId() != null)
+                    .collect(Collectors.toMap(
+                            UserDto::getId,
+                            u -> u,
+                            (a, b) -> a
+                    ));
+        }
+
+        return assignments.stream()
+                .map(a -> toExamAssignmentResponse(a, usersById))
+                .toList();
     }
 
     @Override
@@ -215,30 +266,45 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<UserDto> getStudentsByTeacher(Long teacherId) {
-        List<Exam> exams = examRepository.findAllByTeacherId(teacherId);
-        List<Long> examIds = exams.stream().map(Exam::getId).collect(Collectors.toList());
+        log.info("Getting students for teacher: {}", teacherId);
 
-        List<ExamAssignment> assignments = examAssignmentRepository.findAllByExamIdIn(examIds);
+        List<Exam> teacherExams = examRepository.findByTeacherId(teacherId);
+
+        if (teacherExams.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> teacherExamIds = teacherExams.stream()
+                .map(Exam::getId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (teacherExamIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<ExamAssignment> assignments = examAssignmentRepository.findAllByExamIdIn(teacherExamIds);
+
+        if (assignments.isEmpty()) {
+            return List.of();
+        }
+
         List<Long> studentIds = assignments.stream()
                 .map(ExamAssignment::getStudentId)
                 .distinct()
-                .toList();
+                .collect(Collectors.toList());
 
-        List<UserDto> students = new ArrayList<>();
-        for (Long studentId : studentIds) {
-            UserDto user = userServiceClient.getUserById(studentId);
-            if (user != null) {
-                students.add(user);
-            }
-        }
-        
+        List<UserDto> students = userServiceClient.getUsersByIds(studentIds);
+
+        log.info("Found {} students for teacher {}", students.size(), teacherId);
         return students;
     }
 
+
     @Transactional
     @Override
+    @CacheEvict(value = {"question-list", "exam-details"}, allEntries = true)
     public QuestionResponse addQuestion(Long examId, Long teacherId, AddQuestionRequest request) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -278,6 +344,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"question-list", "exam-details"}, allEntries = true)
     public QuestionResponse updateQuestion(Long questionId, Long teacherId, UpdateQuestionRequest request) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
@@ -314,6 +381,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional
+    @CacheEvict(value = {"question-list", "exam-details"}, allEntries = true)
     public void deleteQuestion(Long questionId, Long teacherId) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
@@ -328,6 +396,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "question-list", key = "#examId + ':teacher'")
     public List<QuestionResponse> getExamQuestionsForTeacher(Long examId, Long teacherId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -366,14 +435,14 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         return r;
     }
 
-    private ExamAssignmentResponse toExamAssignmentResponse(ExamAssignment assignment) {
+    private ExamAssignmentResponse toExamAssignmentResponse(ExamAssignment assignment, Map<Long, UserDto> usersById) {
         ExamAssignmentResponse r = new ExamAssignmentResponse();
         r.setId(assignment.getId());
         r.setExamId(assignment.getExamId());
         r.setStudentId(assignment.getStudentId());
         r.setAssignedAt(assignment.getAssignedAt());
 
-        UserDto user = userServiceClient.getUserById(assignment.getStudentId());
+        UserDto user = usersById.get(assignment.getStudentId());
         if (user != null) {
             r.setStudentName(user.getFirstName() + " " + user.getLastName());
             r.setStudentFirstName(user.getFirstName());
@@ -530,7 +599,3 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         return resp;
     }
 }
-
-
-
-

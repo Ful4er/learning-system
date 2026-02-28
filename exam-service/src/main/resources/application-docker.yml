@@ -37,6 +37,7 @@ spring:
     redis:
       time-to-live: 60000
       cache-null-values: false
+      use-key-prefix: true
     custom:
       ttl:
         exam: 600
@@ -65,3 +66,11 @@ jwt:
 api:
   user-service:
     url: ${API_USER_SERVICE_URL:http://user-service:8081}
+    user-url: /api/users/
+    user-search-url: /api/users/search
+    introspection-url: /api/auth/introspect
+
+logging:
+  level:
+    org.springframework.core.env: DEBUG
+    org.springframework.boot.context.properties: DEBUG
