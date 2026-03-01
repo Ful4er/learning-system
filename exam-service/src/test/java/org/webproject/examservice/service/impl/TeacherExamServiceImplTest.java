@@ -74,8 +74,6 @@ class TeacherExamServiceImplTest {
         exam.setStatus(Exam.ExamStatus.PUBLISHED);
 
         when(examRepository.findById(examId)).thenReturn(Optional.of(exam));
-        when(questionRepository.findAllByExamIdOrderByIdAsc(examId)).thenReturn(List.of());
-        when(examAssignmentRepository.findAllByExamId(examId)).thenReturn(List.of());
 
         ExamResponse response = service.publishExam(examId, teacherId);
 
@@ -117,7 +115,7 @@ class TeacherExamServiceImplTest {
         when(examRepository.findById(examId)).thenReturn(Optional.of(exam));
         when(examAssignmentRepository.findAllByExamId(examId)).thenReturn(List.of(a1, a2));
         when(userServiceClient.getUsersByIds(eq(List.of(11L, 22L)))).thenReturn(List.of(u1, u2));
-        when(examAttemptRepository.findAllByExamIdAndStudentId(eq(examId), any())).thenReturn(List.of());
+        when(examAttemptRepository.findAllByExamIdAndStudentIdIn(eq(examId), any())).thenReturn(List.of());
 
         List<ExamAssignmentResponse> result = service.getExamAssignments(examId, teacherId);
 

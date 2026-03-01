@@ -25,6 +25,7 @@ import org.webproject.examservice.model.*;
 import org.webproject.examservice.model.StudentAnswer;
 import org.webproject.examservice.repository.*;
 import org.webproject.examservice.service.TeacherExamService;
+import org.webproject.examservice.util.Role;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,7 +36,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -71,14 +71,17 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     public ExamResponse getExamById(Long examId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
-        return toExamResponse(exam);
+        int questionCount = (int) questionRepository.countByExamId(examId);
+        int assignedCount = (int) examAssignmentRepository.countByExamId(examId);
+        return toExamResponse(exam, questionCount, assignedCount);
     }
 
     @Override
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "exam-details", key = "#examId"),
-            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId")
+            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId"),
+            @CacheEvict(value = "student-results", key = "'teacher:' + #teacherId", allEntries = true)
     })
     public ExamResponse updateExam(Long examId, Long teacherId, UpdateExamRequest request) {
         Exam exam = examRepository.findById(examId)
@@ -100,7 +103,8 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     @Caching(evict = {
             @CacheEvict(value = "exam-details", key = "#examId"),
             @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId"),
-            @CacheEvict(value = "question-list", allEntries = true)
+            @CacheEvict(value = "question-list", allEntries = true),
+            @CacheEvict(value = "student-results", key = "'teacher:' + #teacherId", allEntries = true)
     })
     public void deleteExam(Long examId, Long teacherId) {
         Exam exam = examRepository.findById(examId)
@@ -114,7 +118,8 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "exam-details", key = "#examId"),
-            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId")
+            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId"),
+            @CacheEvict(value = "student-results", key = "'teacher:' + #teacherId", allEntries = true)
     })
     public ExamResponse publishExam(Long examId, Long teacherId) {
         Exam exam = examRepository.findById(examId)
@@ -134,7 +139,8 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     @Transactional
     @Caching(evict = {
             @CacheEvict(value = "exam-details", key = "#examId"),
-            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId")
+            @CacheEvict(value = "exam-list", key = "'teacher:' + #teacherId"),
+            @CacheEvict(value = "student-results", key = "'teacher:' + #teacherId", allEntries = true)
     })
     public ExamResponse archiveExam(Long examId, Long teacherId) {
         Exam exam = examRepository.findById(examId)
@@ -150,9 +156,21 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     @Transactional(readOnly = true)
     @Cacheable(value = "exam-list", key = "'teacher:' + #teacherId")
     public List<ExamResponse> getExamsByTeacher(Long teacherId) {
-        return examRepository.findAllByTeacherId(teacherId).stream()
-                .map(this::toExamResponse)
-                .peek(System.out::println)
+        List<Exam> exams = examRepository.findAllByTeacherId(teacherId);
+        if (exams.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> examIds = exams.stream().map(Exam::getId).filter(Objects::nonNull).toList();
+        Map<Long, Long> questionCountByExamId = questionRepository.countByExamIdIn(examIds).stream()
+                .collect(Collectors.toMap(QuestionRepository.ExamIdCount::getExamId, QuestionRepository.ExamIdCount::getCnt));
+        Map<Long, Long> assignedCountByExamId = examAssignmentRepository.countByExamIdIn(examIds).stream()
+                .collect(Collectors.toMap(ExamAssignmentRepository.ExamIdCount::getExamId, ExamAssignmentRepository.ExamIdCount::getCnt));
+
+        return exams.stream()
+                .map(exam -> toExamResponse(exam,
+                        questionCountByExamId.getOrDefault(exam.getId(), 0L).intValue(),
+                        assignedCountByExamId.getOrDefault(exam.getId(), 0L).intValue()))
                 .collect(Collectors.toList());
     }
 
@@ -188,8 +206,29 @@ public class TeacherExamServiceImpl implements TeacherExamService {
                     ));
         }
 
+        return mapExamAssignmentsWithAttempts(examId, assignments, usersById);
+    }
+
+    private List<ExamAssignmentResponse> mapExamAssignmentsWithAttempts(Long examId, List<ExamAssignment> assignments, Map<Long, UserDto> usersById) {
+        List<Long> studentIds = assignments.stream()
+                .map(ExamAssignment::getStudentId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, ExamAttempt> latestAttemptByStudentId;
+        if (studentIds.isEmpty()) {
+            latestAttemptByStudentId = new HashMap<>();
+        } else {
+            latestAttemptByStudentId = examAttemptRepository.findAllByExamIdAndStudentIdIn(examId, studentIds).stream()
+                    .filter(a -> a.getStudentId() != null)
+                    .collect(Collectors.toMap(
+                            ExamAttempt::getStudentId,
+                            a -> a,
+                            (a, b) -> resolveAttemptTimestamp(a).isAfter(resolveAttemptTimestamp(b)) ? a : b
+                    ));
+        }
         return assignments.stream()
-                .map(a -> toExamAssignmentResponse(a, usersById))
+                .map(a -> toExamAssignmentResponse(a, usersById, latestAttemptByStudentId.get(a.getStudentId())))
                 .toList();
     }
 
@@ -199,8 +238,15 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
         ensureOwner(exam, teacherId);
+
+        List<Long> assignedStudentIds = new ArrayList<>();
         boolean handled = false;
-        log.info("Assign students called for exam {}: emailsCount={}, idsCount={}", examId, request.getStudentEmails() == null ? 0 : request.getStudentEmails().size(), request.getStudentIds() == null ? 0 : request.getStudentIds().size());
+
+        log.info("Assign students called for exam {}: emailsCount={}, idsCount={}",
+                examId,
+                request.getStudentEmails() == null ? 0 : request.getStudentEmails().size(),
+                request.getStudentIds() == null ? 0 : request.getStudentIds().size());
+
         if (request.getStudentEmails() != null && !request.getStudentEmails().isEmpty()) {
             handled = true;
             for (String studentEmail : request.getStudentEmails()) {
@@ -211,15 +257,14 @@ public class TeacherExamServiceImpl implements TeacherExamService {
                 log.info("AssignStudents: resolving email id for original='{}', sanitized='{}'", studentEmail, sanitizedEmail);
                 UserDto user = userServiceClient.getUserByEmail(sanitizedEmail);
                 if (user == null || user.getId() == null) {
-                    throw new org.webproject.examservice.exception.UserNotFoundException(sanitizedEmail);
+                    throw new UserNotFoundException(sanitizedEmail);
                 }
 
                 Long studentId = user.getId();
-                if (user.getRole() != null && !"STUDENT".equalsIgnoreCase(user.getRole())) {
+                if (user.getRole() != null && !Role.STUDENT.equals(user.getRole())) {
                     throw new IllegalArgumentException("User with email " + sanitizedEmail + " is not a student");
                 }
-                Optional<ExamAssignment> existing = examAssignmentRepository.findByExamIdAndStudentId(examId, studentId);
-                if (existing.isPresent()) {
+                if (examAssignmentRepository.existsByExamIdAndStudentId(examId, studentId)) {
                     throw new StudentAlreadyAssignedException(examId, sanitizedEmail);
                 }
 
@@ -227,6 +272,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
                 assignment.setExamId(examId);
                 assignment.setStudentId(studentId);
                 examAssignmentRepository.save(assignment);
+                assignedStudentIds.add(studentId);
             }
         }
 
@@ -236,24 +282,37 @@ public class TeacherExamServiceImpl implements TeacherExamService {
                 if (studentId == null) {
                     throw new IllegalArgumentException("Student id cannot be null");
                 }
-                Optional<ExamAssignment> existing = examAssignmentRepository.findByExamIdAndStudentId(examId, studentId);
-                if (existing.isPresent()) {
+                if (examAssignmentRepository.existsByExamIdAndStudentId(examId, studentId)) {
                     throw new StudentAlreadyAssignedException(examId, studentId);
                 }
                 ExamAssignment assignment = new ExamAssignment();
                 assignment.setExamId(examId);
                 assignment.setStudentId(studentId);
                 examAssignmentRepository.save(assignment);
+                assignedStudentIds.add(studentId);
             }
         }
 
         if (!handled) {
             throw new IllegalArgumentException("At least one of studentEmails or studentIds must be provided");
         }
+
+        // Очищаем кэш для всех назначенных студентов
+        for (Long studentId : assignedStudentIds) {
+            evictStudentResultsCache(teacherId, studentId);
+        }
+    }
+
+    @CacheEvict(value = "student-results", key = "#teacherId + ':' + #studentId")
+    public void evictStudentResultsCache(Long teacherId, Long studentId) {
+        log.debug("Evicting student-results cache for teacher: {}, student: {}", teacherId, studentId);
     }
 
     @Override
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "student-results", key = "#teacherId + ':' + #studentId")
+    })
     public void removeStudentAssignment(Long examId, Long studentId, Long teacherId) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -265,6 +324,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         examAssignmentRepository.delete(assignment);
     }
 
+    @Transactional(readOnly = true)
     @Override
     public List<UserDto> getStudentsByTeacher(Long teacherId) {
         log.info("Getting students for teacher: {}", teacherId);
@@ -301,10 +361,12 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         return students;
     }
 
-
     @Transactional
     @Override
-    @CacheEvict(value = {"question-list", "exam-details"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = {"question-list", "exam-details"}, allEntries = true),
+            @CacheEvict(value = "student-results", key = "'teacher:' + #teacherId", allEntries = true)
+    })
     public QuestionResponse addQuestion(Long examId, Long teacherId, AddQuestionRequest request) {
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
@@ -344,7 +406,10 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional
-    @CacheEvict(value = {"question-list", "exam-details"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = {"question-list", "exam-details"}, allEntries = true),
+            @CacheEvict(value = "student-results", key = "'teacher:' + #teacherId", allEntries = true)
+    })
     public QuestionResponse updateQuestion(Long questionId, Long teacherId, UpdateQuestionRequest request) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
@@ -381,7 +446,10 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional
-    @CacheEvict(value = {"question-list", "exam-details"}, allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = {"question-list", "exam-details"}, allEntries = true),
+            @CacheEvict(value = "student-results", key = "'teacher:' + #teacherId", allEntries = true)
+    })
     public void deleteQuestion(Long questionId, Long teacherId) {
         Question question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new QuestionNotFoundException(questionId));
@@ -402,8 +470,18 @@ public class TeacherExamServiceImpl implements TeacherExamService {
                 .orElseThrow(() -> new ExamNotFoundException(examId));
         ensureOwner(exam, teacherId);
 
-        return questionRepository.findAllByExamIdOrderByIdAsc(examId).stream()
-                .map(q -> toQuestionResponse(q, true))
+        List<Question> questions = questionRepository.findAllByExamIdOrderByIdAsc(examId);
+        if (questions.isEmpty()) {
+            return List.of();
+        }
+        List<Long> questionIds = questions.stream().map(Question::getId).filter(Objects::nonNull).toList();
+        Map<Long, List<QuestionOption>> optionsByQuestionId = questionOptionRepository
+                .findAllByQuestionIdInOrderByQuestionIdAscOrderIndexAsc(questionIds)
+                .stream()
+                .collect(Collectors.groupingBy(QuestionOption::getQuestionId));
+
+        return questions.stream()
+                .map(q -> toQuestionResponse(q, true, optionsByQuestionId.getOrDefault(q.getId(), List.of())))
                 .collect(Collectors.toList());
     }
 
@@ -420,6 +498,12 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     }
 
     private ExamResponse toExamResponse(Exam exam) {
+        int questionCount = (int) questionRepository.countByExamId(exam.getId());
+        int assignedCount = (int) examAssignmentRepository.countByExamId(exam.getId());
+        return toExamResponse(exam, questionCount, assignedCount);
+    }
+
+    private ExamResponse toExamResponse(Exam exam, Integer questionCount, Integer assignedStudentCount) {
         ExamResponse r = new ExamResponse();
         r.setId(exam.getId());
         r.setTitle(exam.getTitle());
@@ -430,12 +514,16 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         r.setDurationMinutes(exam.getDurationMinutes());
         r.setPassingScore(exam.getPassingScore());
         r.setStatus(exam.getStatus().name());
-        r.setQuestionCount(questionRepository.findAllByExamIdOrderByIdAsc(exam.getId()).size());
-        r.setAssignedStudentCount(examAssignmentRepository.findAllByExamId(exam.getId()).size());
+        r.setQuestionCount(questionCount);
+        r.setAssignedStudentCount(assignedStudentCount);
         return r;
     }
 
     private ExamAssignmentResponse toExamAssignmentResponse(ExamAssignment assignment, Map<Long, UserDto> usersById) {
+        return toExamAssignmentResponse(assignment, usersById, null);
+    }
+
+    private ExamAssignmentResponse toExamAssignmentResponse(ExamAssignment assignment, Map<Long, UserDto> usersById, ExamAttempt latestAttempt) {
         ExamAssignmentResponse r = new ExamAssignmentResponse();
         r.setId(assignment.getId());
         r.setExamId(assignment.getExamId());
@@ -450,15 +538,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
             r.setStudentEmail(user.getEmail());
         }
 
-        List<ExamAttempt> attempts = examAttemptRepository.findAllByExamIdAndStudentId(
-                assignment.getExamId(),
-                assignment.getStudentId()
-        );
-        if (!attempts.isEmpty()) {
-            ExamAttempt latestAttempt = attempts.stream()
-                    .max(Comparator.comparing(this::resolveAttemptTimestamp))
-                    .orElse(attempts.get(attempts.size() - 1));
-
+        if (latestAttempt != null) {
             r.setCompletedAt(latestAttempt.getFinishedAt());
             if (latestAttempt.getCalculatedScore() != null) {
                 r.setScore((int) Math.round(latestAttempt.getCalculatedScore()));
@@ -473,6 +553,11 @@ public class TeacherExamServiceImpl implements TeacherExamService {
     }
 
     private QuestionResponse toQuestionResponse(Question q, boolean showCorrectAnswers) {
+        List<QuestionOption> opts = questionOptionRepository.findAllByQuestionIdOrderByOrderIndexAsc(q.getId());
+        return toQuestionResponse(q, showCorrectAnswers, opts);
+    }
+
+    private QuestionResponse toQuestionResponse(Question q, boolean showCorrectAnswers, List<QuestionOption> opts) {
         QuestionResponse r = new QuestionResponse();
         r.setId(q.getId());
         r.setExamId(q.getExamId());
@@ -480,7 +565,6 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         r.setType(q.getType().name());
         r.setPoints(q.getPoints());
 
-        List<QuestionOption> opts = questionOptionRepository.findAllByQuestionIdOrderByOrderIndexAsc(q.getId());
         List<QuestionResponse.Option> mapped = opts.stream().map(o -> {
             QuestionResponse.Option ro = new QuestionResponse.Option();
             ro.setId(o.getId());
@@ -497,30 +581,52 @@ public class TeacherExamServiceImpl implements TeacherExamService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "student-results", key = "#teacherId + ':' + #studentId")
     public List<StudentExamResultResponse> getStudentResultsForTeacher(Long teacherId, Long studentId) {
-        List<StudentExamResultResponse> results = new ArrayList<>();
+        log.info("Getting results for teacher: {}, student: {}", teacherId, studentId);
 
         List<Exam> exams = examRepository.findAllByTeacherId(teacherId);
+        if (exams.isEmpty()) {
+            log.debug("No exams found for teacher {}", teacherId);
+            return List.of();
+        }
+
+        List<Long> examIds = exams.stream().map(Exam::getId).filter(Objects::nonNull).toList();
+
+        List<ExamAssignment> assignments = examAssignmentRepository.findAllByExamIdInAndStudentId(examIds, studentId);
+        Map<Long, ExamAssignment> assignmentByExamId = assignments.stream()
+                .collect(Collectors.toMap(ExamAssignment::getExamId, a -> a, (a, b) -> a));
+
+        List<ExamAttempt> attempts = examAttemptRepository.findAllByExamIdInAndStudentId(examIds, studentId);
+        Map<Long, List<ExamAttempt>> attemptsByExamId = attempts.stream()
+                .collect(Collectors.groupingBy(ExamAttempt::getExamId));
+
+        List<StudentExamResultResponse> results = new ArrayList<>();
+
         for (Exam exam : exams) {
             StudentExamResultResponse r = new StudentExamResultResponse();
+
             r.setExamId(exam.getId());
             r.setExamTitle(exam.getTitle());
-            r.setExamStatus(exam.getStatus().name());
+            r.setExamStatus(exam.getStatus() != null ? exam.getStatus().name() : null);
             r.setPassingScore(exam.getPassingScore());
 
-            examAssignmentRepository.findByExamIdAndStudentId(exam.getId(), studentId).ifPresent(a -> {
+            ExamAssignment assignment = assignmentByExamId.get(exam.getId());
+            if (assignment != null) {
                 r.setAssigned(true);
-                r.setAssignedAt(a.getAssignedAt());
-            });
+                r.setAssignedAt(assignment.getAssignedAt());
+            }
 
-            List<ExamAttempt> attempts = examAttemptRepository.findAllByExamIdAndStudentId(exam.getId(), studentId);
-            r.setAttemptsCount(attempts.size());
-            if (!attempts.isEmpty()) {
-                ExamAttempt last = attempts.stream()
-                        .max((a, b) -> a.getStartedAt().compareTo(b.getStartedAt()))
-                        .orElse(attempts.get(attempts.size() - 1));
+            List<ExamAttempt> examAttempts = attemptsByExamId.getOrDefault(exam.getId(), List.of());
+            r.setAttemptsCount(examAttempts.size());
+
+            if (!examAttempts.isEmpty()) {
+                ExamAttempt last = examAttempts.stream()
+                        .max(Comparator.comparing(ExamAttempt::getStartedAt))
+                        .orElse(examAttempts.getFirst());
+
                 r.setLastAttemptId(last.getId());
-                r.setLastAttemptStatus(last.getStatus().name());
+                r.setLastAttemptStatus(last.getStatus() != null ? last.getStatus().name() : null);
                 r.setLastAttemptScore(last.getCalculatedScore());
                 r.setLastAttemptFinishedAt(last.getFinishedAt());
             }
@@ -528,9 +634,9 @@ public class TeacherExamServiceImpl implements TeacherExamService {
             results.add(r);
         }
 
+        log.info("Returning {} results for teacher: {}, student: {}", results.size(), teacherId, studentId);
         return results;
     }
-
     @Override
     @Transactional(readOnly = true)
     public List<ExamAttemptResponse> getExamAttemptsForTeacher(Long examId, Long teacherId) {
@@ -561,7 +667,7 @@ public class TeacherExamServiceImpl implements TeacherExamService {
         r.setStatus(attempt.getStatus().name());
         r.setScore(attempt.getCalculatedScore() != null ? attempt.getCalculatedScore() : 0D);
         r.setExamTitle(exam.getTitle());
-        r.setTotalQuestions(questionRepository.findAllByExamIdOrderByIdAsc(examId).size());
+        r.setTotalQuestions((int) questionRepository.countByExamId(examId));
         r.setPassed(r.getScore() >= exam.getPassingScore());
         r.setAnswers(mapStudentAnswers(attemptId));
         return r;

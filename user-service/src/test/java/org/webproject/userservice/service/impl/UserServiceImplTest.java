@@ -6,6 +6,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cache.CacheManager;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.webproject.userservice.dto.request.RegisterRequest;
 import org.webproject.userservice.exception.EmailAlreadyExistsException;
@@ -42,6 +43,7 @@ class UserServiceImplTest {
 
     @Test
     void createUserFromRegistration_Success() {
+
         RegisterRequest request = new RegisterRequest();
         request.setFirstName("John");
         request.setLastName("Doe");
@@ -56,7 +58,6 @@ class UserServiceImplTest {
         user.setPassword("encodedPassword");
         user.setRole(Role.STUDENT);
 
-        when(userRepository.existsByEmail(request.getEmail())).thenReturn(false);
         when(passwordEncoder.encode(request.getPassword())).thenReturn("encodedPassword");
         when(userRepository.save(any(User.class))).thenReturn(user);
         when(userProfileRepository.save(any(UserProfile.class))).thenReturn(new UserProfile());
@@ -69,7 +70,6 @@ class UserServiceImplTest {
         assertEquals(request.getLastName(), result.getLastName());
         assertEquals(Role.STUDENT, result.getRole());
 
-        verify(userRepository).existsByEmail(request.getEmail());
         verify(passwordEncoder).encode(request.getPassword());
         verify(userRepository).save(any(User.class));
         verify(userProfileRepository).save(any(UserProfile.class));
@@ -80,14 +80,15 @@ class UserServiceImplTest {
         RegisterRequest request = new RegisterRequest();
         request.setEmail("existing@example.com");
 
-        when(userRepository.existsByEmail(request.getEmail())).thenReturn(true);
+        when(passwordEncoder.encode(any())).thenReturn("encodedPassword");
+        when(userRepository.save(any(User.class))).thenThrow(new DataIntegrityViolationException("duplicate"));
 
         EmailAlreadyExistsException exception = assertThrows(EmailAlreadyExistsException.class,
                 () -> userService.createUserFromRegistration(request, Role.STUDENT));
 
         assertEquals("Email already registered", exception.getMessage());
-        verify(userRepository).existsByEmail(request.getEmail());
-        verify(userRepository, never()).save(any(User.class));
+        verify(userRepository).save(any(User.class));
+        verify(userProfileRepository, never()).save(any(UserProfile.class));
     }
 
     @Test

@@ -32,8 +32,11 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -53,9 +56,24 @@ public class StudentExamServiceImpl implements StudentExamService {
     public List<ExamResponse> getAssignedExamsForStudent(Long studentId) {
         List<ExamAssignment> assignments = examAssignmentRepository.findAllByStudentId(studentId);
         List<Long> examIds = assignments.stream().map(ExamAssignment::getExamId).collect(Collectors.toList());
-        return examRepository.findAllById(examIds).stream()
+
+        if (examIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Exam> exams = examRepository.findAllById(examIds).stream()
                 .filter(e -> e.getStatus() == Exam.ExamStatus.PUBLISHED)
-                .map(this::toExamResponse)
+                .toList();
+
+        Map<Long, Long> questionCountByExamId = questionRepository.countByExamIdIn(examIds).stream()
+                .collect(Collectors.toMap(QuestionRepository.ExamIdCount::getExamId, QuestionRepository.ExamIdCount::getCnt));
+        Map<Long, Long> assignedCountByExamId = examAssignmentRepository.countByExamIdIn(examIds).stream()
+                .collect(Collectors.toMap(ExamAssignmentRepository.ExamIdCount::getExamId, ExamAssignmentRepository.ExamIdCount::getCnt));
+
+        return exams.stream()
+                .map(exam -> toExamResponse(exam,
+                        questionCountByExamId.getOrDefault(exam.getId(), 0L).intValue(),
+                        assignedCountByExamId.getOrDefault(exam.getId(), 0L).intValue()))
                 .collect(Collectors.toList());
     }
 
@@ -63,21 +81,35 @@ public class StudentExamServiceImpl implements StudentExamService {
     @Transactional(readOnly = true)
     @Cacheable(value = "exam-details", key = "#examId")
     public ExamResponse getExamDetails(Long examId, Long studentId) {
-        Exam exam = examRepository.findById(examId)
+        ExamRepository.ExamWithCounts row = examRepository.findExamWithCountsById(examId)
                 .orElseThrow(() -> new ExamNotFoundException(examId));
-        return toExamResponse(exam);
+
+        Exam exam = row.getExam();
+        int questionCount = (int) row.getQuestionCount();
+        int assignedCount = (int) row.getAssignedStudentCount();
+        return toExamResponse(exam, questionCount, assignedCount);
     }
 
     @Override
     @Transactional(readOnly = true)
     @Cacheable(value = "question-list", key = "#examId")
     public List<QuestionResponse> getExamQuestions(Long examId, Long studentId) {
-        return questionRepository.findAllByExamIdOrderByIdAsc(examId).stream()
-                .map(this::toQuestionResponse)
+        List<Question> questions = questionRepository.findAllByExamIdOrderByIdAsc(examId);
+        if (questions.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Long> questionIds = questions.stream().map(Question::getId).collect(Collectors.toList());
+        Map<Long, List<QuestionOption>> optionsByQuestionId = questionOptionRepository
+                .findAllByQuestionIdInOrderByQuestionIdAscOrderIndexAsc(questionIds)
+                .stream()
+                .collect(Collectors.groupingBy(QuestionOption::getQuestionId));
+
+        return questions.stream()
+                .map(q -> toQuestionResponse(q, optionsByQuestionId.getOrDefault(q.getId(), Collections.emptyList())))
                 .collect(Collectors.toList());
     }
 
-    private ExamResponse toExamResponse(Exam exam) {
+    private ExamResponse toExamResponse(Exam exam, Integer questionCount, Integer assignedStudentCount) {
         ExamResponse r = new ExamResponse();
         r.setId(exam.getId());
         r.setTitle(exam.getTitle());
@@ -88,12 +120,12 @@ public class StudentExamServiceImpl implements StudentExamService {
         r.setDurationMinutes(exam.getDurationMinutes());
         r.setPassingScore(exam.getPassingScore());
         r.setStatus(exam.getStatus().name());
-        r.setQuestionCount(questionRepository.findAllByExamIdOrderByIdAsc(exam.getId()).size());
-        r.setAssignedStudentCount(examAssignmentRepository.findAllByExamId(exam.getId()).size());
+        r.setQuestionCount(questionCount);
+        r.setAssignedStudentCount(assignedStudentCount);
         return r;
     }
 
-    private QuestionResponse toQuestionResponse(Question q) {
+    private QuestionResponse toQuestionResponse(Question q, List<QuestionOption> opts) {
         QuestionResponse r = new QuestionResponse();
         r.setId(q.getId());
         r.setExamId(q.getExamId());
@@ -101,12 +133,12 @@ public class StudentExamServiceImpl implements StudentExamService {
         r.setType(q.getType().name());
         r.setPoints(q.getPoints());
 
-        List<QuestionOption> opts = questionOptionRepository.findAllByQuestionIdOrderByOrderIndexAsc(q.getId());
         List<QuestionResponse.Option> mapped = opts.stream().map(o -> {
             QuestionResponse.Option ro = new QuestionResponse.Option();
             ro.setId(o.getId());
             ro.setText(o.getText());
             ro.setOrderIndex(o.getOrderIndex());
+
             return ro;
         }).collect(Collectors.toList());
         r.setOptions(mapped);
@@ -119,29 +151,21 @@ public class StudentExamServiceImpl implements StudentExamService {
     public ExamAttemptResponse startExamAttempt(Long studentId, StartExamAttemptRequest request) {
         Exam exam = examRepository.findById(request.getExamId())
                 .orElseThrow(() -> new ExamNotFoundException(request.getExamId()));
-        
+
         if (exam.getStatus() != Exam.ExamStatus.PUBLISHED) {
             throw new InvalidExamStateException("Exam is not published");
         }
 
-        boolean isAssigned = examAssignmentRepository.findByExamIdAndStudentId(request.getExamId(), studentId)
-                .isPresent();
+        boolean isAssigned = examAssignmentRepository.existsByExamIdAndStudentId(request.getExamId(), studentId);
         if (!isAssigned) {
             throw new IllegalArgumentException("Student is not assigned to this exam");
         }
 
-        List<ExamAttempt> existingAttempts = examAttemptRepository.findAllByExamIdAndStudentId(request.getExamId(), studentId);
-        Optional<ExamAttempt> activeAttempt = existingAttempts.stream()
-                .filter(attempt -> attempt.getStatus() == ExamAttempt.AttemptStatus.IN_PROGRESS)
-                .findFirst();
-
-        if (activeAttempt.isPresent()) {
+        if (examAttemptRepository.existsByExamIdAndStudentIdAndStatus(request.getExamId(), studentId, ExamAttempt.AttemptStatus.IN_PROGRESS)) {
             throw new IllegalArgumentException("Student already has an active attempt for this exam");
         }
 
-        boolean hasFinishedAttempt = existingAttempts.stream()
-                .anyMatch(attempt -> attempt.getStatus() == ExamAttempt.AttemptStatus.FINISHED);
-        if (hasFinishedAttempt) {
+        if (examAttemptRepository.existsByExamIdAndStudentIdAndStatus(request.getExamId(), studentId, ExamAttempt.AttemptStatus.FINISHED)) {
             throw new InvalidExamStateException("Student has already completed this exam and cannot start a new attempt");
         }
 
@@ -149,7 +173,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         attempt.setExamId(request.getExamId());
         attempt.setStudentId(studentId);
         attempt.setStatus(ExamAttempt.AttemptStatus.IN_PROGRESS);
-        
+
         ExamAttempt saved = examAttemptRepository.save(attempt);
         return toExamAttemptResponse(saved);
     }
@@ -167,17 +191,17 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (!attempt.getStudentId().equals(studentId)) {
             throw new IllegalArgumentException("Attempt does not belong to this student");
         }
-        
+
         if (attempt.getStatus() != ExamAttempt.AttemptStatus.IN_PROGRESS) {
             throw new InvalidExamStateException("Attempt is not in progress");
         }
-        
+
         attempt.setStatus(ExamAttempt.AttemptStatus.FINISHED);
         attempt.setFinishedAt(Instant.now());
 
         double score = calculateScore(attemptId);
         attempt.setCalculatedScore(score);
-        
+
         ExamAttempt saved = examAttemptRepository.save(attempt);
         return toExamAttemptResponse(saved);
     }
@@ -185,15 +209,13 @@ public class StudentExamServiceImpl implements StudentExamService {
     @Override
     @Transactional(readOnly = true)
     public ExamAttemptResponse getCurrentAttempt(Long studentId, Long examId) {
-        List<ExamAttempt> attempts = examAttemptRepository.findAllByExamIdAndStudentId(examId, studentId);
-        Optional<ExamAttempt> activeAttempt = attempts.stream()
-                .filter(attempt -> attempt.getStatus() == ExamAttempt.AttemptStatus.IN_PROGRESS)
-                .findFirst();
-        
+        Optional<ExamAttempt> activeAttempt = examAttemptRepository
+                .findFirstByExamIdAndStudentIdAndStatus(examId, studentId, ExamAttempt.AttemptStatus.IN_PROGRESS);
+
         if (activeAttempt.isEmpty()) {
             throw new IllegalArgumentException("No active attempt found");
         }
-        
+
         return toExamAttemptResponse(activeAttempt.get());
     }
 
@@ -225,23 +247,20 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (!attempt.getStudentId().equals(studentId)) {
             throw new IllegalArgumentException("Attempt does not belong to this student");
         }
-        
+
         if (attempt.getStatus() != ExamAttempt.AttemptStatus.IN_PROGRESS) {
             throw new InvalidExamStateException("Attempt is not in progress");
         }
-        
+
         Question question = questionRepository.findById(request.getQuestionId())
                 .orElseThrow(() -> new IllegalArgumentException("Question not found"));
-        
+
         if (!question.getExamId().equals(attempt.getExamId())) {
             throw new IllegalArgumentException("Question does not belong to this exam");
         }
 
-        List<StudentAnswer> existingAnswers = studentAnswerRepository.findAllByAttemptId(attemptId);
-        Optional<StudentAnswer> existingAnswer = existingAnswers.stream()
-                .filter(answer -> answer.getQuestionId().equals(request.getQuestionId()))
-                .findFirst();
-        
+        Optional<StudentAnswer> existingAnswer = studentAnswerRepository.findByAttemptIdAndQuestionId(attemptId, request.getQuestionId());
+
         StudentAnswer answer;
         if (existingAnswer.isPresent()) {
             answer = existingAnswer.get();
@@ -250,7 +269,7 @@ public class StudentExamServiceImpl implements StudentExamService {
             answer.setAttemptId(attemptId);
             answer.setQuestionId(request.getQuestionId());
         }
-        
+
         if (request.getSelectedOptionIds() != null && !request.getSelectedOptionIds().isEmpty()) {
             String joined = request.getSelectedOptionIds().stream()
                     .map(String::valueOf)
@@ -260,7 +279,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         if (request.getTextAnswer() != null) {
             answer.setTextAnswer(request.getTextAnswer());
         }
-        
+
         studentAnswerRepository.save(answer);
     }
 
@@ -293,28 +312,43 @@ public class StudentExamServiceImpl implements StudentExamService {
         List<StudentAnswer> answers = studentAnswerRepository.findAllByAttemptId(attemptId);
         double totalScore = 0.0;
         double maxScore = 0.0;
-        
+
+        if (answers == null || answers.isEmpty()) {
+            return 0.0;
+        }
+
+        Set<Long> questionIdsSet = answers.stream().map(StudentAnswer::getQuestionId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (questionIdsSet.isEmpty()) {
+            return 0.0;
+        }
+
+        List<Long> questionIds = questionIdsSet.stream().toList();
+        Map<Long, Question> questionById = questionRepository.findAllByIdIn(questionIds).stream()
+                .collect(Collectors.toMap(Question::getId, Function.identity()));
+
+        Map<Long, List<QuestionOption>> correctOptionsByQuestionId = questionOptionRepository
+                .findCorrectOptionsByQuestionIdInOrderByQuestionIdAscOrderIndexAsc(questionIds)
+                .stream()
+                .collect(Collectors.groupingBy(QuestionOption::getQuestionId));
+
         for (StudentAnswer answer : answers) {
-            Question question = questionRepository.findById(answer.getQuestionId()).orElse(null);
+            Question question = questionById.get(answer.getQuestionId());
             if (question == null) continue;
-            
+
             maxScore += question.getPoints();
-            
+
             if (question.getType() == Question.QuestionType.TEXT) {
                 if (answer.getTextAnswer() != null && !answer.getTextAnswer().trim().isEmpty()) {
                     totalScore += question.getPoints() * 0.5;
                 }
             } else {
-                List<QuestionOption> correctOptions = questionOptionRepository.findAllByQuestionIdOrderByOrderIndexAsc(question.getId())
-                        .stream()
-                        .filter(QuestionOption::getIsCorrect)
-                        .toList();
-                
+                List<QuestionOption> correctOptions = correctOptionsByQuestionId.getOrDefault(question.getId(), Collections.emptyList());
+
                 if (answer.getSelectedOptionIds() != null && !answer.getSelectedOptionIds().isEmpty()) {
                     String[] selectedIds = answer.getSelectedOptionIds().replaceAll("[\\[\\]]", "").split(",");
                     long correctSelected = 0;
                     long totalCorrect = correctOptions.size();
-                    
+
                     for (String idStr : selectedIds) {
                         try {
                             Long selectedId = Long.parseLong(idStr.trim());
@@ -325,14 +359,14 @@ public class StudentExamServiceImpl implements StudentExamService {
                             // Skip invalid IDs
                         }
                     }
-                    
+
                     if (totalCorrect > 0) {
                         totalScore += question.getPoints() * (double) correctSelected / totalCorrect;
                     }
                 }
             }
         }
-        
+
         return maxScore > 0 ? (totalScore / maxScore) * 100 : 0.0;
     }
 
@@ -353,7 +387,7 @@ public class StudentExamServiceImpl implements StudentExamService {
         double scoreVal = attempt.getCalculatedScore() != null ? attempt.getCalculatedScore() : calculateScore(attempt.getId());
         response.setScore(scoreVal);
 
-        Integer totalQ = questionRepository.findAllByExamIdOrderByIdAsc(attempt.getExamId()).size();
+        Integer totalQ = (int) questionRepository.countByExamId(attempt.getExamId());
         response.setTotalQuestions(totalQ);
 
         Exam exam = examRepository.findById(attempt.getExamId()).orElse(null);

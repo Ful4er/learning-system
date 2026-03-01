@@ -3,6 +3,7 @@ package org.webproject.examservice.client;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Component;
 import org.webproject.examservice.dto.response.UserDto;
+import org.webproject.examservice.util.Role;
 
 @Component
 public class UserDtoMapper {
@@ -12,7 +13,7 @@ public class UserDtoMapper {
         dto.setFirstName(getStringValue(node, "firstName", "Unknown"));
         dto.setLastName(getStringValue(node, "lastName", "Student"));
         dto.setEmail(getStringValue(node, "email", "Unknown"));
-        dto.setRole(getStringValue(node, "role", "STUDENT"));
+        dto.setRole(Role.valueOf(getStringValue(node, "role", String.valueOf(Role.STUDENT))));
         return dto;
     }
 

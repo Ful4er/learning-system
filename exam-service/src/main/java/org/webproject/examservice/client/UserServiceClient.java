@@ -16,8 +16,10 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.webproject.examservice.dto.response.TokenIntrospectionResponse;
 import org.webproject.examservice.dto.response.UserDto;
+import org.webproject.examservice.util.Role;
 import reactor.core.publisher.Mono;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -179,7 +181,8 @@ public class UserServiceClient {
         fallback.setFirstName("Student");
         fallback.setLastName("Unknown");
         fallback.setEmail("student" + userId + "@example.com");
-        fallback.setRole("STUDENT");
+        fallback.setRole(Role.STUDENT);
+        fallback.setCreatedAt(LocalDateTime.now());
         return fallback;
     }
 

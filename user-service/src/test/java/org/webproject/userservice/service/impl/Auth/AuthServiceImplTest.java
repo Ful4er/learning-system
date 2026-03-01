@@ -111,7 +111,6 @@ class AuthServiceImplTest {
 
     @Test
     void register_Success() {
-        when(userService.existsByEmail(registerRequest.getEmail())).thenReturn(false);
         when(userService.createUserFromRegistration(registerRequest, Role.STUDENT)).thenReturn(testUser);
 
         AuthResponse response = authService.register(registerRequest);
@@ -120,46 +119,41 @@ class AuthServiceImplTest {
         assertEquals(testUser.getId(), response.getUserId());
         assertEquals("Registration successful", response.getMessage());
 
-        verify(userService).existsByEmail(registerRequest.getEmail());
         verify(userService).createUserFromRegistration(registerRequest, Role.STUDENT);
         verify(jwtTokenUtil).generateToken(testUser);
     }
 
     @Test
     void register_EmailAlreadyExists() {
-        when(userService.existsByEmail(registerRequest.getEmail())).thenReturn(true);
+        when(userService.createUserFromRegistration(registerRequest, Role.STUDENT))
+                .thenThrow(new EmailAlreadyExistsException("Email already registered"));
 
         EmailAlreadyExistsException exception = assertThrows(EmailAlreadyExistsException.class,
                 () -> authService.register(registerRequest));
 
         assertEquals("Email already registered", exception.getMessage());
-        verify(userService).existsByEmail(registerRequest.getEmail());
-        verify(userService, never()).createUserFromRegistration(any(), any());
+        verify(userService).createUserFromRegistration(registerRequest, Role.STUDENT);
     }
 
     @Test
     void register_WithAdminRole_ThrowsException() {
         registerRequest.setRole("ADMIN");
-        when(userService.existsByEmail(registerRequest.getEmail())).thenReturn(false);
 
         InvalidRoleException exception = assertThrows(InvalidRoleException.class,
                 () -> authService.register(registerRequest));
 
         assertEquals("Cannot register with ADMIN role", exception.getMessage());
-        verify(userService).existsByEmail(registerRequest.getEmail());
         verify(userService, never()).createUserFromRegistration(any(), any());
     }
 
     @Test
     void register_WithInvalidRole_ThrowsException() {
         registerRequest.setRole("INVALID_ROLE");
-        when(userService.existsByEmail(registerRequest.getEmail())).thenReturn(false);
 
         InvalidRoleException exception = assertThrows(InvalidRoleException.class,
                 () -> authService.register(registerRequest));
 
         assertTrue(exception.getMessage().contains("Invalid role: INVALID_ROLE"));
-        verify(userService).existsByEmail(registerRequest.getEmail());
         verify(userService, never()).createUserFromRegistration(any(), any());
     }
 

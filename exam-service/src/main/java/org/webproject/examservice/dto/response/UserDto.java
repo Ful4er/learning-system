@@ -1,6 +1,9 @@
 package org.webproject.examservice.dto.response;
 
 import lombok.Data;
+import org.webproject.examservice.util.Role;
+
+import java.time.LocalDateTime;
 
 @Data
 public class UserDto {
@@ -8,5 +11,6 @@ public class UserDto {
     private String firstName;
     private String lastName;
     private String email;
-    private String role;
+    private Role role;
+    private LocalDateTime createdAt;
 }

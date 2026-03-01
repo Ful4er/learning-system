@@ -6,6 +6,7 @@ import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -106,10 +107,6 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public User createUserFromRegistration(RegisterRequest request, Role role) {
-        if (existsByEmail(request.getEmail())) {
-            throw new EmailAlreadyExistsException("Email already registered");
-        }
-
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -117,7 +114,11 @@ public class UserServiceImpl implements UserService {
         user.setLastName(request.getLastName());
         user.setRole(role);
 
-        return createUser(user, role);
+        try {
+            return createUser(user, role);
+        } catch (DataIntegrityViolationException ex) {
+            throw new EmailAlreadyExistsException("Email already registered");
+        }
     }
 
     @Override

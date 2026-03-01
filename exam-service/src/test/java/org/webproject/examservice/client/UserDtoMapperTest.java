@@ -3,6 +3,7 @@ package org.webproject.examservice.client;
 import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.webproject.examservice.util.Role;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -23,7 +24,7 @@ class UserDtoMapperTest {
         assertEquals("John", dto.getFirstName());
         assertEquals("Doe", dto.getLastName());
         assertEquals("john@example.com", dto.getEmail());
-        assertEquals("STUDENT", dto.getRole());
+        assertEquals(Role.STUDENT, dto.getRole());
     }
 
     @Test
@@ -38,7 +39,7 @@ class UserDtoMapperTest {
         assertEquals("Unknown", dto.getFirstName());
         assertEquals("Student", dto.getLastName());
         assertEquals("Unknown", dto.getEmail());
-        assertEquals("STUDENT", dto.getRole());
+        assertEquals(Role.STUDENT, dto.getRole());
     }
 
     @Test
@@ -53,6 +54,6 @@ class UserDtoMapperTest {
         assertEquals("Unknown", dto.getFirstName());
         assertEquals("Student", dto.getLastName());
         assertEquals("Unknown", dto.getEmail());
-        assertEquals("STUDENT", dto.getRole());
+        assertEquals(Role.STUDENT, dto.getRole());
     }
 }

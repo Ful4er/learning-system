@@ -29,6 +29,8 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +65,33 @@ class StudentExamServiceImplTest {
     }
 
     @Test
+    void getExamDetails_usesSingleRepositoryQuery() {
+        Long examId = 10L;
+        Long studentId = 1L;
+
+        Exam exam = new Exam();
+        exam.setId(examId);
+        exam.setStatus(Exam.ExamStatus.PUBLISHED);
+
+        ExamRepository.ExamWithCounts row = mock(ExamRepository.ExamWithCounts.class);
+        when(row.getExam()).thenReturn(exam);
+        when(row.getQuestionCount()).thenReturn(3L);
+        when(row.getAssignedStudentCount()).thenReturn(7L);
+        when(examRepository.findExamWithCountsById(examId)).thenReturn(Optional.of(row));
+
+        ExamResponse resp = service.getExamDetails(examId, studentId);
+
+        assertNotNull(resp);
+        assertEquals(examId, resp.getId());
+        assertEquals(3, resp.getQuestionCount());
+        assertEquals(7, resp.getAssignedStudentCount());
+
+        verify(examRepository).findExamWithCountsById(examId);
+        verify(questionRepository, never()).countByExamId(any());
+        verify(examAssignmentRepository, never()).countByExamId(any());
+    }
+
+    @Test
     void getAssignedExamsForStudent_returnsOnlyPublished() {
         Long studentId = 1L;
 
@@ -83,8 +112,8 @@ class StudentExamServiceImplTest {
 
         when(examAssignmentRepository.findAllByStudentId(studentId)).thenReturn(List.of(a1, a2));
         when(examRepository.findAllById(eq(List.of(10L, 20L)))).thenReturn(List.of(published, draft));
-        when(questionRepository.findAllByExamIdOrderByIdAsc(any())).thenReturn(List.of());
-        when(examAssignmentRepository.findAllByExamId(any())).thenReturn(List.of());
+        when(questionRepository.countByExamIdIn(any())).thenReturn(List.of());
+        when(examAssignmentRepository.countByExamIdIn(any())).thenReturn(List.of());
 
         List<ExamResponse> result = service.getAssignedExamsForStudent(studentId);
 
@@ -130,7 +159,7 @@ class StudentExamServiceImplTest {
         exam.setStatus(Exam.ExamStatus.PUBLISHED);
 
         when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
-        when(examAssignmentRepository.findByExamIdAndStudentId(10L, studentId)).thenReturn(Optional.empty());
+        when(examAssignmentRepository.existsByExamIdAndStudentId(10L, studentId)).thenReturn(false);
 
         assertThrows(IllegalArgumentException.class, () -> service.startExamAttempt(studentId, req));
     }
@@ -145,18 +174,9 @@ class StudentExamServiceImplTest {
         exam.setId(10L);
         exam.setStatus(Exam.ExamStatus.PUBLISHED);
 
-        ExamAssignment assignment = new ExamAssignment();
-        assignment.setExamId(10L);
-        assignment.setStudentId(studentId);
-
-        ExamAttempt active = new ExamAttempt();
-        active.setExamId(10L);
-        active.setStudentId(studentId);
-        active.setStatus(ExamAttempt.AttemptStatus.IN_PROGRESS);
-
         when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
-        when(examAssignmentRepository.findByExamIdAndStudentId(10L, studentId)).thenReturn(Optional.of(assignment));
-        when(examAttemptRepository.findAllByExamIdAndStudentId(10L, studentId)).thenReturn(List.of(active));
+        when(examAssignmentRepository.existsByExamIdAndStudentId(10L, studentId)).thenReturn(true);
+        when(examAttemptRepository.existsByExamIdAndStudentIdAndStatus(10L, studentId, ExamAttempt.AttemptStatus.IN_PROGRESS)).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> service.startExamAttempt(studentId, req));
     }
@@ -171,10 +191,6 @@ class StudentExamServiceImplTest {
         exam.setId(10L);
         exam.setStatus(Exam.ExamStatus.PUBLISHED);
 
-        ExamAssignment assignment = new ExamAssignment();
-        assignment.setExamId(10L);
-        assignment.setStudentId(studentId);
-
         ExamAttempt saved = new ExamAttempt();
         saved.setId(777L);
         saved.setExamId(10L);
@@ -182,8 +198,9 @@ class StudentExamServiceImplTest {
         saved.setStatus(ExamAttempt.AttemptStatus.IN_PROGRESS);
 
         when(examRepository.findById(10L)).thenReturn(Optional.of(exam));
-        when(examAssignmentRepository.findByExamIdAndStudentId(10L, studentId)).thenReturn(Optional.of(assignment));
-        when(examAttemptRepository.findAllByExamIdAndStudentId(10L, studentId)).thenReturn(List.of());
+        when(examAssignmentRepository.existsByExamIdAndStudentId(10L, studentId)).thenReturn(true);
+        when(examAttemptRepository.existsByExamIdAndStudentIdAndStatus(10L, studentId, ExamAttempt.AttemptStatus.IN_PROGRESS)).thenReturn(false);
+        when(examAttemptRepository.existsByExamIdAndStudentIdAndStatus(10L, studentId, ExamAttempt.AttemptStatus.FINISHED)).thenReturn(false);
         when(examAttemptRepository.save(any(ExamAttempt.class))).thenReturn(saved);
 
         ExamAttemptResponse response = service.startExamAttempt(studentId, req);

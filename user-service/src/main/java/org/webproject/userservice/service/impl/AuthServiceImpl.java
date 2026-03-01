@@ -13,7 +13,6 @@ import org.webproject.userservice.dto.request.LoginRequest;
 import org.webproject.userservice.dto.request.RegisterRequest;
 import org.webproject.userservice.dto.response.AuthResponse;
 import org.webproject.userservice.exception.AuthenticationException;
-import org.webproject.userservice.exception.EmailAlreadyExistsException;
 import org.webproject.userservice.exception.InvalidRoleException;
 import org.webproject.userservice.model.User;
 import org.webproject.userservice.service.AuthService;
@@ -59,10 +58,6 @@ public class AuthServiceImpl implements AuthService {
     @Override
     @Transactional
     public AuthResponse register(RegisterRequest request) {
-        if (userService.existsByEmail(request.getEmail())) {
-            throw new EmailAlreadyExistsException("Email already registered");
-        }
-
         Role role = validateAndResolveRole(request.getRole());
         User savedUser = userService.createUserFromRegistration(request, role);
 
